@@ -1,0 +1,35 @@
+# Build output
+build/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# Gradle
+.gradle/
+local.properties
+gradle-app.setting
+.gradletasknamecache
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Keystores
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local backups produced by the in-app backup feature (never commit user data)
+/backups/

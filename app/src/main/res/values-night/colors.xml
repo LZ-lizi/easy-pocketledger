@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night variant keeps the cold-start window dark in dark mode. -->
+    <color name="window_background">#FF0F1216</color>
+</resources>

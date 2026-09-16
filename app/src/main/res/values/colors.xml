@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Replaced at runtime by the Compose surface colour; this is only the
+         pre-first-frame window background so cold start never flashes white. -->
+    <color name="window_background">#FFF7F9FC</color>
+    <color name="ic_launcher_background">#FF2F6BFF</color>
+</resources>
