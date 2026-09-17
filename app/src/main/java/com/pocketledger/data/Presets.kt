@@ -26,10 +26,6 @@ object Presets {
     const val DAILY = "日常生活"
     const val LEISURE = "娱乐开销"
 
-    /** Stable identity keys for the two main categories; see [CategoryEntity.systemKey]. */
-    const val KEY_DAILY = "daily"
-    const val KEY_LEISURE = "leisure"
-
     private const val COLOR_DAILY = 0xFF2F6BFF.toInt()
     private const val COLOR_LEISURE = 0xFFFF7A45.toInt()
 
@@ -42,7 +38,6 @@ object Presets {
 
     private class Main(
         val name: String,
-        val key: String,
         val colorArgb: Int,
         val iconKey: String,
         val items: List<String>,
@@ -50,7 +45,7 @@ object Presets {
 
     private val EXPENSE_TREE = listOf(
         Main(
-            DAILY, KEY_DAILY, COLOR_DAILY, "daily",
+            DAILY, COLOR_DAILY, "daily",
             listOf(
                 "食堂 / 外卖",
                 "校园卡充值",
@@ -71,7 +66,7 @@ object Presets {
             ),
         ),
         Main(
-            LEISURE, KEY_LEISURE, COLOR_LEISURE, "leisure",
+            LEISURE, COLOR_LEISURE, "leisure",
             listOf(
                 "游戏 / 会员充值",
                 "聚会 AA / 请客",
@@ -126,7 +121,6 @@ object Presets {
                     kind = CategoryKind.EXPENSE,
                     parentId = null,
                     iconKey = main.iconKey,
-                    systemKey = main.key,
                     colorArgb = main.colorArgb,
                     sortOrder = mainIndex,
                     isSystem = true,

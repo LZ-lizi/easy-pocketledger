@@ -314,10 +314,28 @@ private fun AllowanceCard(
             )
 
             Spacer(Modifier.height(16.dp))
-            SegmentedProgress(
-                dailyCents = allowance.spentOnDailyCents,
-                leisureCents = allowance.spentOnLeisureCents,
-            )
+            // A plain fill against the allowance: the old two-colour split compared
+            // 日常 against 娱乐, a distinction the category tree no longer carries.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                if (allowance.progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(allowance.progress)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(
+                                if (allowance.isOverBudget) ledger.expense
+                                else MaterialTheme.colorScheme.primary
+                            )
+                    )
+                }
+            }
 
             Spacer(Modifier.height(10.dp))
             Row(
@@ -336,15 +354,6 @@ private fun AllowanceCard(
                         color = scheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                // Deliberately quiet: the leisure share is available, not shouted.
-                if (allowance.spentCents > 0L) {
-                    Text(
-                        text = "娱乐 ${(allowance.leisureRatio * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ledger.leisure,
-                    )
-                }
             }
         }
     }
@@ -355,51 +364,6 @@ private fun secondaryLine(allowance: AllowanceSnapshot): String = when {
     allowance.isOverBudget -> "已超出 ${Money.formatWithSymbol(-allowance.remainingCents)}"
     allowance.daysRemaining <= 0 -> "本月已结束"
     else -> "日均 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"
-}
-
-/**
- * A two-stop progress bar rather than a single fill: how much of this month's
- * spending was unavoidable versus optional, at a glance and without a legend.
- */
-@Composable
-private fun SegmentedProgress(dailyCents: Long, leisureCents: Long) {
-    val ledger = LedgerTheme.colors
-    val total = dailyCents + leisureCents
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(10.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        if (total <= 0L) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            )
-            return@Row
-        }
-        val dailyWeight = (dailyCents.toFloat() / total).coerceAtLeast(0.0001f)
-        val leisureWeight = (leisureCents.toFloat() / total).coerceAtLeast(0.0001f)
-        if (dailyCents > 0L) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .weight(dailyWeight)
-                    .background(ledger.daily)
-            )
-        }
-        if (leisureCents > 0L) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .weight(leisureWeight)
-                    .background(ledger.leisure)
-            )
-        }
-    }
 }
 
 @Composable

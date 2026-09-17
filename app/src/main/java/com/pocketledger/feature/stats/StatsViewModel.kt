@@ -6,9 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
-import com.pocketledger.data.Presets
 import com.pocketledger.data.dao.CategoryTotal
-import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.entity.CategoryEntity
@@ -58,8 +56,6 @@ data class StatsUiState(
     val terms: List<TermEntity> = emptyList(),
     val selectedTermId: Long? = null,
     val totals: PeriodTotals = PeriodTotals(0, 0),
-    val dailyCents: Long = 0,
-    val leisureCents: Long = 0,
     val topCategories: List<CategoryRank> = emptyList(),
     /** Top wedges plus an aggregated 「其他」; what the donut draws. */
     val donutSlices: List<CategoryRank> = emptyList(),
@@ -115,12 +111,10 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
 
         combine(
             repository.observeTotals(startKey, endKey),
-            repository.observeMainCategoryTotals(startKey, endKey),
             repository.observeCategoryTotals(startKey, endKey),
             repository.observeMonthTotals(trendStart, endKey),
             repository.observeCategories(CategoryKind.EXPENSE),
-        ) { totals, mainTotals, categoryTotals, months, categories ->
-            val (daily, leisure) = splitMainTotals(mainTotals, categories)
+        ) { totals, categoryTotals, months, categories ->
             val ranking = buildRanking(categoryTotals, categories, totals.expenseCents, RANKING_SIZE)
             StatsUiState(
                 mode = selection.mode,
@@ -131,8 +125,6 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
                 terms = selection.terms,
                 selectedTermId = selection.termId ?: selection.terms.firstOrNull()?.id,
                 totals = totals,
-                dailyCents = daily,
-                leisureCents = leisure,
                 topCategories = ranking,
                 donutSlices = collapseTail(ranking, totals.expenseCents),
                 months = months,
@@ -205,23 +197,6 @@ internal fun resolveRange(
             Triple(term.startDateKey, term.endDateKey, term.name)
         }
     }
-}
-
-internal fun splitMainTotals(
-    totals: List<MainCategoryTotal>,
-    categories: List<CategoryEntity>,
-): Pair<Long, Long> {
-    val dailyId = categories.firstOrNull { it.systemKey == Presets.KEY_DAILY }?.id
-    val leisureId = categories.firstOrNull { it.systemKey == Presets.KEY_LEISURE }?.id
-    var daily = 0L
-    var leisure = 0L
-    for (total in totals) {
-        when (total.mainCategoryId) {
-            dailyId -> daily += total.totalCents
-            leisureId -> leisure += total.totalCents
-        }
-    }
-    return daily to leisure
 }
 
 internal fun buildRanking(

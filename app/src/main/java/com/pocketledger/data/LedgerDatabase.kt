@@ -8,6 +8,8 @@ import androidx.room.TypeConverters
 import com.pocketledger.data.dao.AccountDao
 import com.pocketledger.data.dao.AllowanceDao
 import com.pocketledger.data.dao.CategoryDao
+import com.pocketledger.data.dao.InstallmentDao
+import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.TagDao
 import com.pocketledger.data.dao.TermDao
 import com.pocketledger.data.dao.TxnDao
@@ -18,6 +20,9 @@ import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.GoalEntity
 import com.pocketledger.data.entity.ImportBatchEntity
 import com.pocketledger.data.entity.ImportRuleEntity
+import com.pocketledger.data.entity.InstallmentPeriodEntity
+import com.pocketledger.data.entity.InstallmentPlanEntity
+import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.TagEntity
 import com.pocketledger.data.entity.TemplateEntity
 import com.pocketledger.data.entity.TermEntity
@@ -26,12 +31,13 @@ import com.pocketledger.data.entity.TxnTagCrossRef
 import com.pocketledger.data.entity.WishEntity
 
 /**
- * The whole schema is declared in v1 even though features land milestone by
- * milestone. Adding tables to an already-shipped database means writing
- * migrations; declaring them up front costs nothing and avoids that.
+ * The whole schema is declared up front even though features land milestone by
+ * milestone: adding tables to an already-shipped database means writing
+ * migrations, and declaring them early avoids that.
  */
 @Database(
     entities = [
+        LedgerEntity::class,
         AccountEntity::class,
         CategoryEntity::class,
         TxnEntity::class,
@@ -45,27 +51,31 @@ import com.pocketledger.data.entity.WishEntity
         TemplateEntity::class,
         ImportRuleEntity::class,
         ImportBatchEntity::class,
+        InstallmentPlanEntity::class,
+        InstallmentPeriodEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class LedgerDatabase : RoomDatabase() {
 
+    abstract fun ledgerDao(): LedgerDao
     abstract fun accountDao(): AccountDao
     abstract fun categoryDao(): CategoryDao
     abstract fun txnDao(): TxnDao
     abstract fun allowanceDao(): AllowanceDao
     abstract fun tagDao(): TagDao
     abstract fun termDao(): TermDao
+    abstract fun installmentDao(): InstallmentDao
 
     companion object {
         const val NAME = "ledger.db"
 
         fun build(context: Context): LedgerDatabase =
             Room.databaseBuilder(context.applicationContext, LedgerDatabase::class.java, NAME)
-                // Foreign keys back the tag join table; SQLite needs them switched on.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

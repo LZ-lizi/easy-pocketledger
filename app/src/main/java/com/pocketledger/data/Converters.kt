@@ -6,6 +6,8 @@ import com.pocketledger.data.entity.BudgetPeriodType
 import com.pocketledger.data.entity.BudgetScope
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.GoalStatus
+import com.pocketledger.data.entity.InstallmentKind
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnSource
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.entity.WishStatus
@@ -73,4 +75,16 @@ class Converters {
 
     @TypeConverter
     fun toGoalStatus(value: String): GoalStatus = GoalStatus.valueOf(value)
+
+    @TypeConverter
+    fun fromLedgerType(value: LedgerType): String = value.name
+
+    @TypeConverter
+    fun toLedgerType(value: String): LedgerType = LedgerType.valueOf(value)
+
+    @TypeConverter
+    fun fromInstallmentKind(value: InstallmentKind): String = value.name
+
+    @TypeConverter
+    fun toInstallmentKind(value: String): InstallmentKind = InstallmentKind.valueOf(value)
 }

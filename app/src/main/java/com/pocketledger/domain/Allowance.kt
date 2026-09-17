@@ -16,8 +16,6 @@ data class AllowanceSnapshot(
     val remainingCents: Long,
     val daysRemaining: Int,
     val dailyAvailableCents: Long,
-    val spentOnDailyCents: Long,
-    val spentOnLeisureCents: Long,
     val hasBudget: Boolean,
 ) {
     val isOverBudget: Boolean get() = hasBudget && remainingCents < 0
@@ -29,21 +27,17 @@ data class AllowanceSnapshot(
         } else {
             (spentCents.toDouble() / budgetCents.toDouble()).coerceIn(0.0, 1.0).toFloat()
         }
-
-    /** Share of this month's spending that was discretionary, 0f..1f. */
-    val leisureRatio: Float
-        get() = if (spentCents <= 0L) 0f else (spentOnLeisureCents.toDouble() / spentCents.toDouble()).toFloat()
 }
 
 /**
  * The allowance rule, in one place.
  *
  * ```
- * 剩余 = 额度 − 全部支出        (日常生活 + 娱乐开销: every yuan comes out of the allowance)
- * 日均 = 剩余 ÷ 剩余天数         (剩余天数含今天)
+ * 剩余 = 额度 − 全部支出
+ * 日均 = 剩余 ÷ 剩余天数（含今天）
  * ```
  *
- * Counting *all* spending rather than only 日常生活 was a deliberate choice: the
+ * Counting *all* spending rather than only essentials was a deliberate choice: the
  * alternative lets the card show plenty left while the month is actually blown.
  */
 object AllowanceCalculator {
@@ -52,8 +46,6 @@ object AllowanceCalculator {
         periodKey: String,
         budgetCents: Long?,
         spentCents: Long,
-        spentOnDailyCents: Long,
-        spentOnLeisureCents: Long,
         today: LocalDate,
     ): AllowanceSnapshot {
         val hasBudget = budgetCents != null && budgetCents > 0L
@@ -73,8 +65,6 @@ object AllowanceCalculator {
             remainingCents = remaining,
             daysRemaining = daysRemaining,
             dailyAvailableCents = dailyAvailable,
-            spentOnDailyCents = spentOnDailyCents,
-            spentOnLeisureCents = spentOnLeisureCents,
             hasBudget = hasBudget,
         )
     }

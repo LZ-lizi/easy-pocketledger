@@ -19,14 +19,12 @@ class AllowanceCalculatorTest {
     private fun compute(
         budget: Long?,
         spent: Long,
-        daily: Long = spent,
-        leisure: Long = 0,
         on: LocalDate = today,
-    ) = AllowanceCalculator.compute(month, budget, spent, daily, leisure, on)
+    ) = AllowanceCalculator.compute(month, budget, spent, on)
 
     @Test
     fun `remaining is the allowance minus every kind of spending`() {
-        val snapshot = compute(budget = 250000, spent = 125950, daily = 90000, leisure = 35950)
+        val snapshot = compute(budget = 250000, spent = 125950)
         assertEquals(124050L, snapshot.remainingCents)
         assertEquals(125950L, snapshot.spentCents)
         assertTrue(snapshot.hasBudget)
@@ -83,18 +81,6 @@ class AllowanceCalculatorTest {
         val snapshot = compute(budget = 300000, spent = 0, on = LocalDate.of(2026, 10, 5))
         assertEquals(0, snapshot.daysRemaining)
         assertEquals(0L, snapshot.dailyAvailableCents)
-    }
-
-    @Test
-    fun `leisure ratio reflects the discretionary share`() {
-        val snapshot = compute(budget = 250000, spent = 100000, daily = 72000, leisure = 28000)
-        assertEquals(0.28f, snapshot.leisureRatio, 0.001f)
-    }
-
-    @Test
-    fun `leisure ratio is zero rather than NaN with no spending`() {
-        val snapshot = compute(budget = 250000, spent = 0)
-        assertEquals(0f, snapshot.leisureRatio, 0.001f)
     }
 
     @Test

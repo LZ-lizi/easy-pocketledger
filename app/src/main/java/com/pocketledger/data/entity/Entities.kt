@@ -1,29 +1,54 @@
 package com.pocketledger.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Schema v1.
+ * Schema v2.
  *
  * Conventions that hold across every table:
  * - Money is `Long` **cents**, never a floating-point type.
+ * - Rows that belong to a ledger carry `ledgerId`; **nothing is global**. Statistics,
+ *   budgets, accounts and installment plans are all scoped to one ledger.
  * - Time is stored twice: `happenedAt` (epoch millis, for ordering) and
- *   `localDateKey` (`YYYY-MM-DD`, for day grouping and indexes). Storing the key
- *   avoids recomputing the local date in every query and sidesteps timezone drift.
+ *   `localDateKey` (`YYYY-MM-DD`, for day grouping and indexes).
  * - Mutable rows carry `deletedAt` for soft deletion so undo / import rollback /
  *   backup merge stay possible.
  * - Enums are stored by name; Room converts them.
+ *
+ * `ledgerId` declares `defaultValue = "1"` so the v1 -> v2 migration can add the
+ * column with the same default the schema expects, instead of rebuilding every
+ * table.
  */
+
+/** An isolated set of books. Everything else in the app hangs off one of these. */
+@Entity(
+    tableName = "ledger",
+    indices = [Index("isArchived"), Index("sortOrder")],
+)
+data class LedgerEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val type: LedgerType,
+    val iconKey: String = "book",
+    val colorArgb: Int = 0xFF2F6BFF.toInt(),
+    val sortOrder: Int = 0,
+    val isArchived: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val deletedAt: Long? = null,
+)
 
 @Entity(
     tableName = "account",
-    indices = [Index("sortOrder"), Index("isArchived")],
+    indices = [Index("ledgerId"), Index("sortOrder"), Index("isArchived")],
 )
 data class AccountEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val type: AccountType,
     val iconKey: String = "wallet",
@@ -36,6 +61,14 @@ data class AccountEntity(
     val repayDay: Int? = null,
     /** Cleared cards can be hidden from the net-worth total without being deleted. */
     val includeInTotal: Boolean = true,
+    /**
+     * Accounts are only offered in 预算模式 ledgers. A 累计模式 ledger still owns one
+     * hidden account so transaction rows stay uniform, but it is never shown.
+     *
+     * The SQL default matters: the v1 -> v2 migration adds this to a populated
+     * table, which only works for a NOT NULL column that has one.
+     */
+    @ColumnInfo(defaultValue = "0") val isHidden: Boolean = false,
     val sortOrder: Int = 0,
     val isArchived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
@@ -44,31 +77,33 @@ data class AccountEntity(
 )
 
 /**
- * Two levels only in the shipped presets: `parentId == null` is a **main
- * category** (日常生活 / 娱乐开销), and pointing at one makes a concrete item such
- * as 食堂 / 外卖. The model itself allows deeper nesting.
+ * Two levels: `parentId == null` is a **top-level category** (餐饮 / 交通 / 娱乐 ...),
+ * and pointing at one makes a concrete item such as 外卖 or 公共交通.
  *
- * Treating a main category as an ordinary row is what lets budgets, filters and
- * statistics aggregate by it with no extra concept or enum.
+ * Top-level rows exist for grouping and for statistics, not as a first step of data
+ * entry: the entry keypad shows the leaf items directly, and a leaf always inherits
+ * its parent for the 大类 roll-up.
+ *
+ * `iconKey` selects a vector icon. Built-in rows carry a curated key; custom rows
+ * fall back to a default.
  */
 @Entity(
     tableName = "category",
-    indices = [Index("parentId"), Index(value = ["kind", "parentId", "sortOrder"])],
+    indices = [
+        Index("ledgerId"),
+        Index("parentId"),
+        Index(value = ["ledgerId", "kind", "parentId", "sortOrder"]),
+    ],
 )
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val kind: CategoryKind,
     val parentId: Long? = null,
     val iconKey: String = "more",
     val colorArgb: Int = 0,
     val sortOrder: Int = 0,
-    /**
-     * Stable identity for the two shipped main categories, e.g. `"daily"` /
-     * `"leisure"`. The display name is user-editable, so the 日常 vs 娱乐 split
-     * cannot key off it, and sort order is reorderable too.
-     */
-    val systemKey: String? = null,
     /** True for the shipped presets; they may still be renamed, moved or deleted. */
     val isSystem: Boolean = false,
     val isArchived: Boolean = false,
@@ -80,6 +115,7 @@ data class CategoryEntity(
 @Entity(
     tableName = "txn",
     indices = [
+        Index("ledgerId"),
         Index("happenedAt"),
         Index("localDateKey"),
         Index("accountId"),
@@ -89,10 +125,12 @@ data class CategoryEntity(
         Index("importBatchId"),
         Index(value = ["externalNo"], unique = false),
         Index(value = ["dedupeHash"], unique = false),
+        Index(value = ["planId", "planPeriodIndex"], unique = false),
     ],
 )
 data class TxnEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val type: TxnType,
     /** Always positive; the direction comes from [type]. */
     val amountCents: Long,
@@ -103,6 +141,7 @@ data class TxnEntity(
     /** Merchant / counterparty, auto-filled from 支付宝/微信「交易对方」columns. */
     val merchant: String? = null,
     val note: String? = null,
+    /** Epoch millis, precise to the second: entries record a real time of day. */
     val happenedAt: Long,
     val localDateKey: String,
     val source: TxnSource = TxnSource.MANUAL,
@@ -113,6 +152,9 @@ data class TxnEntity(
     /** 「不计收支」rows: recorded but excluded from every total. */
     val isExcludedFromStats: Boolean = false,
     val importBatchId: Long? = null,
+    /** Set when this row was produced by an installment plan falling due. */
+    val planId: Long? = null,
+    val planPeriodIndex: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val deletedAt: Long? = null,
@@ -120,10 +162,11 @@ data class TxnEntity(
 
 @Entity(
     tableName = "tag",
-    indices = [Index(value = ["name"], unique = true)],
+    indices = [Index(value = ["ledgerId", "name"], unique = true)],
 )
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val colorArgb: Int = 0xFF6B7280.toInt(),
     val createdAt: Long = System.currentTimeMillis(),
@@ -160,10 +203,14 @@ data class TxnTagCrossRef(
  */
 @Entity(
     tableName = "budget",
-    indices = [Index(value = ["periodType", "periodKey", "scope", "categoryId"], unique = true)],
+    indices = [
+        Index("ledgerId"),
+        Index(value = ["ledgerId", "periodType", "periodKey", "scope", "categoryId"], unique = true),
+    ],
 )
 data class BudgetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val periodType: BudgetPeriodType,
     /** `YYYY-MM` for months, `YYYY` for years. */
     val periodKey: String,
@@ -177,10 +224,11 @@ data class BudgetEntity(
 /** Monthly living allowance, keyed `YYYY-MM`; missing months may inherit the last one. */
 @Entity(
     tableName = "allowance",
-    indices = [Index(value = ["periodKey"], unique = true)],
+    indices = [Index(value = ["ledgerId", "periodKey"], unique = true)],
 )
 data class AllowanceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val periodKey: String,
     val amountCents: Long,
     val note: String? = null,
@@ -189,9 +237,13 @@ data class AllowanceEntity(
 )
 
 /** A named date range such as 「2026 秋季学期」, used by the statistics time filter. */
-@Entity(tableName = "term")
+@Entity(
+    tableName = "term",
+    indices = [Index("ledgerId")],
+)
 data class TermEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val startDateKey: String,
     val endDateKey: String,
@@ -201,9 +253,13 @@ data class TermEntity(
 )
 
 /** 愿望清单: park a purchase, decide later. */
-@Entity(tableName = "wish")
+@Entity(
+    tableName = "wish",
+    indices = [Index("ledgerId")],
+)
 data class WishEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val expectedPriceCents: Long? = null,
     val note: String? = null,
@@ -219,9 +275,13 @@ data class WishEntity(
  * 存钱目标. Progress comes from the linked account's balance when there is one,
  * otherwise from [manualSavedCents].
  */
-@Entity(tableName = "saving_goal")
+@Entity(
+    tableName = "saving_goal",
+    indices = [Index("ledgerId")],
+)
 data class GoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val targetCents: Long,
     val linkedAccountId: Long? = null,
@@ -233,9 +293,13 @@ data class GoalEntity(
 )
 
 /** One-tap entry presets shown above the keypad. */
-@Entity(tableName = "template")
+@Entity(
+    tableName = "template",
+    indices = [Index("ledgerId")],
+)
 data class TemplateEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val name: String,
     val type: TxnType,
     val amountCents: Long? = null,
@@ -252,10 +316,11 @@ data class TemplateEntity(
 /** Remembers "this keyword belongs in that category" so the next import is one tap. */
 @Entity(
     tableName = "import_rule",
-    indices = [Index(value = ["keyword"], unique = true)],
+    indices = [Index(value = ["ledgerId", "keyword"], unique = true)],
 )
 data class ImportRuleEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val keyword: String,
     val categoryId: Long? = null,
     val accountId: Long? = null,
@@ -264,12 +329,82 @@ data class ImportRuleEntity(
 )
 
 /** Groups one import so the whole batch can be rolled back in a single action. */
-@Entity(tableName = "import_batch")
+@Entity(
+    tableName = "import_batch",
+    indices = [Index("ledgerId")],
+)
 data class ImportBatchEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
     val source: TxnSource,
     val fileName: String? = null,
     val txnCount: Int = 0,
     val skippedCount: Int = 0,
     val importedAt: Long = System.currentTimeMillis(),
+)
+
+/**
+ * 月付 / 白条: pay [perPeriodCents] on day [repayDay] of each month, [periodCount] times.
+ *
+ * Only the schedule lives here. Each period that falls due materialises a normal
+ * transaction, so the plan contributes to the ledger's statistics and budgets the
+ * same way any other spending does -- there is no parallel accounting path.
+ */
+@Entity(
+    tableName = "installment_plan",
+    indices = [Index("ledgerId"), Index("isActive"), Index("accountId")],
+)
+data class InstallmentPlanEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(defaultValue = "1") val ledgerId: Long = 1,
+    val name: String,
+    val kind: InstallmentKind,
+    val totalAmountCents: Long,
+    val periodCount: Int,
+    val perPeriodCents: Long,
+    /** Day of month the payment is due, 1..31; clamped to short months. */
+    val repayDay: Int,
+    val startDateKey: String,
+    val accountId: Long? = null,
+    val categoryId: Long? = null,
+    val note: String? = null,
+    val isActive: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+/**
+ * One instalment of a plan.
+ *
+ * The unique `(planId, periodIndex)` index is the idempotency guarantee behind
+ * "同一计划同一期只生成一次": re-running the catch-up can never double-charge, even
+ * if it runs twice in the same session or the app was closed across the due date.
+ * [txnId] stays null until the period actually falls due.
+ */
+@Entity(
+    tableName = "installment_period",
+    indices = [
+        Index(value = ["planId", "periodIndex"], unique = true),
+        Index("txnId"),
+        Index("dueDateKey"),
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = InstallmentPlanEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["planId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class InstallmentPeriodEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val planId: Long,
+    /** 1-based. */
+    val periodIndex: Int,
+    val dueDateKey: String,
+    val amountCents: Long,
+    /** Set once the due date arrives and the transaction was written. */
+    val txnId: Long? = null,
+    val generatedAt: Long? = null,
 )

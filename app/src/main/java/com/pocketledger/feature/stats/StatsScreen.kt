@@ -102,8 +102,6 @@ fun StatsScreen(
             item(key = "donut") { DonutCard(state) }
         }
 
-        item(key = "split") { DailyVsLeisureCard(state) }
-
         if (state.months.isNotEmpty()) {
             item(key = "trend") { TrendCard(state) }
         }
@@ -388,73 +386,6 @@ private fun LegendRow(slice: CategoryRank) {
             style = MoneyTextStyles.Small,
             color = MaterialTheme.colorScheme.onSurface,
         )
-    }
-}
-
-@Composable
-private fun DailyVsLeisureCard(state: StatsUiState) {
-    val ledger = LedgerTheme.colors
-    val total = state.dailyCents + state.leisureCents
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Text(
-                text = "日常生活 vs 娱乐开销",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(12.dp))
-            SplitRow("日常生活", state.dailyCents, total, ledger.daily)
-            Spacer(Modifier.height(10.dp))
-            SplitRow("娱乐开销", state.leisureCents, total, ledger.leisure)
-        }
-    }
-}
-
-@Composable
-private fun SplitRow(label: String, cents: Long, total: Long, accent: Color) {
-    val fraction = if (total <= 0L) 0f else (cents.toFloat() / total).coerceIn(0f, 1f)
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "${(fraction * 100).toInt()}%",
-                style = MaterialTheme.typography.labelMedium,
-                color = accent,
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = Money.formatWithSymbol(cents),
-                style = MoneyTextStyles.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        ) {
-            if (fraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .background(accent)
-                )
-            }
-        }
     }
 }
 

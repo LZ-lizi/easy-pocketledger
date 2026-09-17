@@ -6,13 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
-import com.pocketledger.data.Presets
 import com.pocketledger.data.dao.DayTotal
-import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.TxnRow
-import com.pocketledger.data.entity.CategoryEntity
-import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.domain.AllowanceCalculator
@@ -101,13 +97,8 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
         repository.observeTotals(key),
         repository.observeRows(key),
         repository.observeDayTotals(key),
-        combine(
-            repository.observeMainCategoryTotals(key),
-            repository.observeCategories(CategoryKind.EXPENSE),
-        ) { totals, categories -> totals to categories },
-    ) { allowanceEntity, totals, rows, dayTotals, splitInput ->
+    ) { allowanceEntity, totals, rows, dayTotals ->
         val today = LocalDate.now()
-        val split = splitMainTotals(splitInput.first, splitInput.second)
         HomeUiState(
             monthKey = key,
             monthLabel = DateKeys.monthLabel(key),
@@ -116,8 +107,6 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
                 periodKey = key,
                 budgetCents = allowanceEntity?.amountCents,
                 spentCents = totals.expenseCents,
-                spentOnDailyCents = split.daily,
-                spentOnLeisureCents = split.leisure,
                 today = today,
             ),
             totals = totals,
@@ -195,31 +184,6 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
             }
         }
     }
-}
-
-private class MainSplit(val daily: Long, val leisure: Long)
-
-/**
- * Maps main-category totals onto 日常 / 娱乐.
- *
- * Matching on `systemKey` rather than the display name keeps this working after
- * the user renames or reorders the two main categories.
- */
-private fun splitMainTotals(
-    totals: List<MainCategoryTotal>,
-    categories: List<CategoryEntity>,
-): MainSplit {
-    val dailyId = categories.firstOrNull { it.systemKey == Presets.KEY_DAILY }?.id
-    val leisureId = categories.firstOrNull { it.systemKey == Presets.KEY_LEISURE }?.id
-    var daily = 0L
-    var leisure = 0L
-    for (total in totals) {
-        when (total.mainCategoryId) {
-            dailyId -> daily += total.totalCents
-            leisureId -> leisure += total.totalCents
-        }
-    }
-    return MainSplit(daily, leisure)
 }
 
 /** Rows arrive already sorted newest-first, so grouping preserves that order. */
