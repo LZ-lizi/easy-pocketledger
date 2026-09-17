@@ -29,11 +29,15 @@ data class EntryUiState(
     val type: TxnType = TxnType.EXPENSE,
     /** Raw keypad text such as `"12.3"`; parsed only when needed. */
     val amountInput: String = "",
+    /** Transfer fee, only meaningful when [type] is TRANSFER. */
+    val feeInput: String = "",
     val allCategories: List<CategoryEntity> = emptyList(),
     val accounts: List<AccountEntity> = emptyList(),
     val selectedMainCategoryId: Long? = null,
     val selectedCategoryId: Long? = null,
     val selectedAccountId: Long? = null,
+    /** Destination account; TRANSFER only. */
+    val selectedToAccountId: Long? = null,
     val note: String = "",
     val merchant: String = "",
     val dateKey: String = DateKeys.dateKey(LocalDate.now()),
@@ -41,25 +45,33 @@ data class EntryUiState(
     /** Drives the brief "已记一笔" confirmation; cleared on the next input. */
     val justSaved: Boolean = false,
 ) {
+    val isTransfer: Boolean get() = type == TxnType.TRANSFER
+
     val kind: CategoryKind
         get() = if (type == TxnType.INCOME) CategoryKind.INCOME else CategoryKind.EXPENSE
 
-    /** Tabs. Expense has 日常 / 娱乐; income is flat so there is nothing to tab. */
+    /** Tabs. Expense has 日常 / 娱乐; income is flat, and a transfer has no category. */
     val mainCategories: List<CategoryEntity>
-        get() = allCategories.filter { it.kind == kind && it.parentId == null }
-            .sortedBy { it.sortOrder }
+        get() = if (isTransfer) {
+            emptyList()
+        } else {
+            allCategories.filter { it.kind == kind && it.parentId == null }
+                .sortedBy { it.sortOrder }
+        }
 
     /**
      * Income categories are all roots, so they are shown directly. Expense items
      * are the children of the selected main category.
      */
     val visibleCategories: List<CategoryEntity>
-        get() = if (kind == CategoryKind.INCOME) {
-            mainCategories
-        } else {
-            val parent = selectedMainCategoryId ?: mainCategories.firstOrNull()?.id
-            allCategories.filter { it.kind == kind && it.parentId == parent }
-                .sortedBy { it.sortOrder }
+        get() = when {
+            isTransfer -> emptyList()
+            kind == CategoryKind.INCOME -> mainCategories
+            else -> {
+                val parent = selectedMainCategoryId ?: mainCategories.firstOrNull()?.id
+                allCategories.filter { it.kind == kind && it.parentId == parent }
+                    .sortedBy { it.sortOrder }
+            }
         }
 
     /** Recently used items float to the front; a flat grid is slow to scan otherwise. */
@@ -73,10 +85,23 @@ data class EntryUiState(
 
     val amountCents: Long get() = Money.parseYuanToCents(amountInput) ?: 0L
 
+    val feeCents: Long get() = Money.parseYuanToCents(feeInput) ?: 0L
+
     val canSave: Boolean
-        get() = amountCents > 0L &&
-            selectedAccountId != null &&
-            (type == TxnType.TRANSFER || selectedCategoryId != null)
+        get() = when (type) {
+            // Money moving between two of your own accounts is not spending, so no
+            // category is required -- but it must actually move somewhere else.
+            TxnType.TRANSFER -> amountCents > 0L &&
+                selectedAccountId != null &&
+                selectedToAccountId != null &&
+                selectedAccountId != selectedToAccountId
+
+            else -> amountCents > 0L && selectedAccountId != null && selectedCategoryId != null
+        }
+
+    /** Accounts offered as the destination, i.e. everything except the source. */
+    val destinationAccounts: List<AccountEntity>
+        get() = accounts.filter { it.id != selectedAccountId }
 }
 
 /**
@@ -109,7 +134,14 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
                     val accountId = state.selectedAccountId
                         ?.takeIf { id -> accounts.any { it.id == id } }
                         ?: accounts.firstOrNull()?.id
-                    state.copy(accounts = accounts, selectedAccountId = accountId)
+                    val toAccountId = state.selectedToAccountId
+                        ?.takeIf { id -> accounts.any { it.id == id } && id != accountId }
+                        ?: accounts.firstOrNull { it.id != accountId }?.id
+                    state.copy(
+                        accounts = accounts,
+                        selectedAccountId = accountId,
+                        selectedToAccountId = toAccountId,
+                    )
                 }
             }
         }
@@ -122,13 +154,12 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
     // ------------------------------------------------------------------ editing
 
     /**
-     * Switches between expense and income.
+     * Switches among expense, income and transfer.
      *
-     * The category selection is dropped because the two trees share no ids; the
-     * amount is deliberately kept, since a mistyped type is the common case.
+     * The category selection is dropped because the trees share no ids; the amount
+     * is deliberately kept, since a mistyped type is the common case.
      */
     fun setType(type: TxnType) {
-        if (type == TxnType.TRANSFER) return // wired up with the accounts milestone
         _uiState.update { state ->
             if (state.type == type) return@update state
             val mains = state.allCategories.filter { it.kind == kindOf(type) && it.parentId == null }
@@ -136,6 +167,7 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
                 type = type,
                 selectedCategoryId = null,
                 selectedMainCategoryId = mains.firstOrNull()?.id,
+                feeInput = if (type == TxnType.TRANSFER) state.feeInput else "",
                 justSaved = false,
             )
         }
@@ -173,7 +205,19 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
     }
 
     fun selectAccount(id: Long) {
-        _uiState.update { it.copy(selectedAccountId = id, justSaved = false) }
+        _uiState.update { state ->
+            // Picking the destination as the source swaps them rather than blocking.
+            val toId = if (state.selectedToAccountId == id) state.selectedAccountId else state.selectedToAccountId
+            state.copy(selectedAccountId = id, selectedToAccountId = toId, justSaved = false)
+        }
+    }
+
+    fun selectToAccount(id: Long) {
+        _uiState.update { it.copy(selectedToAccountId = id, justSaved = false) }
+    }
+
+    fun setFee(value: String) {
+        _uiState.update { it.copy(feeInput = value, justSaved = false) }
     }
 
     fun setNote(value: String) {
@@ -195,6 +239,7 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
         if (!state.canSave) return
         val cents = Money.parseYuanToCents(state.amountInput) ?: return
         val accountId = state.selectedAccountId ?: return
+        val fee = Money.parseYuanToCents(state.feeInput) ?: 0L
 
         viewModelScope.launch {
             repository.addTransaction(
@@ -202,8 +247,10 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
                     type = state.type,
                     amountCents = cents,
                     accountId = accountId,
-                    categoryId = state.selectedCategoryId,
-                    merchant = state.merchant.trim().ifBlank { null },
+                    toAccountId = if (state.isTransfer) state.selectedToAccountId else null,
+                    feeCents = if (state.isTransfer && fee > 0L) fee else null,
+                    categoryId = if (state.isTransfer) null else state.selectedCategoryId,
+                    merchant = if (state.isTransfer) null else state.merchant.trim().ifBlank { null },
                     note = state.note.trim().ifBlank { null },
                     happenedAt = epochMillisFor(state.dateKey),
                     localDateKey = state.dateKey,
@@ -214,6 +261,7 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
             _uiState.update {
                 it.copy(
                     amountInput = "",
+                    feeInput = "",
                     note = "",
                     merchant = "",
                     justSaved = true,

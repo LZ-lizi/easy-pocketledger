@@ -47,6 +47,27 @@ class LedgerRepository(
 
     suspend fun account(id: Long): AccountEntity? = accountDao.byId(id)
 
+    /** One-shot snapshot for form screens; live screens subscribe instead. */
+    suspend fun accountsSnapshot(): List<AccountEntity> = accountDao.all()
+
+    suspend fun categoriesSnapshot(): List<CategoryEntity> = categoryDao.all()
+
+    suspend fun accountCount(): Int = accountDao.count()
+
+    suspend fun addAccount(account: AccountEntity): Long = accountDao.insert(account)
+
+    suspend fun updateAccount(account: AccountEntity) {
+        accountDao.update(account.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    /**
+     * Archiving hides an account from pickers without touching its history, which
+     * is the right move for a card you stopped using but still want reports for.
+     */
+    suspend fun setAccountArchived(id: Long, archived: Boolean) = accountDao.setArchived(id, archived)
+
+    suspend fun deleteAccount(id: Long) = accountDao.softDelete(id)
+
     // ---------------------------------------------------------------- categories
 
     fun observeCategories(kind: CategoryKind): Flow<List<CategoryEntity>> =
@@ -77,14 +98,18 @@ class LedgerRepository(
 
     // -------------------------------------------------------------- transactions
 
-    fun observeRows(monthKey: String): Flow<List<TxnRow>> {
+    fun observeRows(monthKey: String, accountId: Long? = null): Flow<List<TxnRow>> {
         val (start, end) = DateKeys.monthRange(monthKey)
-        return txnDao.observeRows(start, end)
+        return txnDao.observeRows(start, end, accountId)
     }
 
-    fun observeRows(startDateKey: String, endDateKey: String): Flow<List<TxnRow>> {
+    fun observeRows(
+        startDateKey: String,
+        endDateKey: String,
+        accountId: Long? = null,
+    ): Flow<List<TxnRow>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return txnDao.observeRows(start, end)
+        return txnDao.observeRows(start, end, accountId)
     }
 
     fun observeTotals(monthKey: String): Flow<PeriodTotals> {

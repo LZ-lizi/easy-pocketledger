@@ -35,4 +35,22 @@ object KeypadInput {
         current.isEmpty() -> "0."
         else -> "$current."
     }
+
+    /**
+     * Filters free-form text-field input down to a well-formed amount.
+     *
+     * The edit form lets the system keyboard type into the amount field, so unlike
+     * the keypad it can receive letters, a second decimal point or an extra
+     * decimal. Rather than reject the keystroke, the text is cleaned up in place --
+     * silently dropping a character the user typed feels broken; rewriting it into
+     * the nearest valid amount does not.
+     */
+    fun sanitizeAmount(text: String): String {
+        val cleaned = text.filter { it.isDigit() || it == '.' }
+        val firstDot = cleaned.indexOf('.')
+        if (firstDot < 0) return cleaned.take(MAX_INTEGER_DIGITS)
+        val whole = cleaned.substring(0, firstDot).take(MAX_INTEGER_DIGITS)
+        val decimals = cleaned.substring(firstDot + 1).filter(Char::isDigit).take(MAX_DECIMALS)
+        return "$whole.$decimals"
+    }
 }

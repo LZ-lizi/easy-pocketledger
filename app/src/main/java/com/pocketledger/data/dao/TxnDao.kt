@@ -24,6 +24,10 @@ interface TxnDao {
     /**
      * Ledger rows joined with their category and accounts so the list needs no
      * follow-up lookups (the classic N+1 on a scrolling list).
+     *
+     * [accountFilter] serves the account-detail screen: `null` means "every
+     * account", otherwise the row must touch that account on either side, so a
+     * transfer appears in the ledger of both accounts it connects.
      */
     @Query(
         """
@@ -51,11 +55,15 @@ interface TxnDao {
         LEFT JOIN category c ON c.id = t.categoryId
         LEFT JOIN account a ON a.id = t.accountId
         LEFT JOIN account ta ON ta.id = t.toAccountId
-        WHERE t.deletedAt IS NULL AND t.localDateKey BETWEEN :startKey AND :endKey
+        WHERE t.deletedAt IS NULL
+          AND t.localDateKey BETWEEN :startKey AND :endKey
+          AND (:accountFilter IS NULL
+               OR t.accountId = :accountFilter
+               OR t.toAccountId = :accountFilter)
         ORDER BY t.happenedAt DESC, t.id DESC
         """
     )
-    fun observeRows(startKey: String, endKey: String): Flow<List<TxnRow>>
+    fun observeRows(startKey: String, endKey: String, accountFilter: Long?): Flow<List<TxnRow>>
 
     /**
      * Range totals for the month header.

@@ -15,12 +15,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.pocketledger.feature.accounts.AccountsScreen
 import com.pocketledger.feature.accounts.AccountsViewModel
+import com.pocketledger.feature.edit.EditScreen
+import com.pocketledger.feature.edit.EditViewModel
 import com.pocketledger.feature.entry.EntryScreen
 import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
@@ -38,6 +42,10 @@ object Routes {
     const val ACCOUNTS = "accounts"
     const val SETTINGS = "settings"
     const val ENTRY = "entry"
+    const val EDIT = "edit"
+    const val EDIT_ARG = "txnId"
+
+    fun edit(transactionId: Long): String = "$EDIT/$transactionId"
 }
 
 private class TabItem(val route: String, val label: String, val icon: LedgerIcon)
@@ -49,11 +57,13 @@ private val TABS = listOf(
     TabItem(Routes.SETTINGS, "我的", LedgerIcon.PERSON),
 )
 
+private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"
+
 /**
- * The application shell: four tabs plus the keypad entry route.
+ * The application shell: four tabs plus two full-window routes.
  *
- * The bottom bar and the FAB are hoisted above the `NavHost` so the entry screen
- * can hide both and take the whole window -- a keypad that shares space with a
+ * The bottom bar and the FAB are hoisted above the `NavHost` so the entry and edit
+ * screens can take the whole window -- a keypad that shares space with a
  * navigation bar is a keypad that gets mis-tapped.
  */
 @Composable
@@ -61,13 +71,13 @@ fun AppShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val isEntry = currentRoute == Routes.ENTRY
+    val isOverlay = currentRoute == Routes.ENTRY || currentRoute == EDIT_ROUTE
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!isEntry) {
+            if (!isOverlay) {
                 LedgerBottomBar(currentRoute = currentRoute) { target ->
                     navController.navigate(target) {
                         // Keep each tab's own state and avoid stacking duplicates.
@@ -101,7 +111,11 @@ fun AppShell() {
         ) {
             composable(Routes.LEDGER) {
                 val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
-                HomeScreen(viewModel = viewModel, contentPadding = padding)
+                HomeScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onOpenTransaction = { id -> navController.navigate(Routes.edit(id)) },
+                )
             }
 
             composable(Routes.STATS) {
@@ -121,6 +135,20 @@ fun AppShell() {
             composable(Routes.ENTRY) {
                 val viewModel: EntryViewModel = viewModel(factory = EntryViewModel.Factory)
                 EntryScreen(
+                    viewModel = viewModel,
+                    onClose = { navController.popBackStack() },
+                    modifier = Modifier.padding(padding),
+                )
+            }
+
+            composable(
+                route = EDIT_ROUTE,
+                arguments = listOf(navArgument(Routes.EDIT_ARG) { type = NavType.LongType }),
+            ) { entry ->
+                val transactionId = entry.arguments?.getLong(Routes.EDIT_ARG) ?: 0L
+                val viewModel: EditViewModel =
+                    viewModel(factory = EditViewModel.factory(transactionId))
+                EditScreen(
                     viewModel = viewModel,
                     onClose = { navController.popBackStack() },
                     modifier = Modifier.padding(padding),

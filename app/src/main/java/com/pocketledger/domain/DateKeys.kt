@@ -1,7 +1,10 @@
 package com.pocketledger.domain
 
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
+import java.time.ZoneId
 
 /**
  * Date keys.
@@ -60,5 +63,23 @@ object DateKeys {
     fun monthLabel(monthKey: String): String {
         val month = YearMonth.parse(monthKey)
         return "${month.year}年${month.monthValue}月"
+    }
+
+    /**
+     * Moves a timestamp onto a different calendar day while keeping its wall-clock
+     * time.
+     *
+     * Editing only the date must not reshuffle the ledger: if two entries on the
+     * same day kept their relative order before the edit, they keep it after.
+     * A midnight timestamp is treated as "no meaningful time" and given the current
+     * time so the edited row does not jump to the top or bottom of its day.
+     */
+    fun withTimeOfDay(dateKey: String, originalMillis: Long): Long {
+        val date = runCatching { LocalDate.parse(dateKey) }.getOrElse { LocalDate.now() }
+        val originalTime = Instant.ofEpochMilli(originalMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalTime()
+        val time = if (originalTime == LocalTime.MIDNIGHT) LocalTime.now() else originalTime
+        return date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     }
 }

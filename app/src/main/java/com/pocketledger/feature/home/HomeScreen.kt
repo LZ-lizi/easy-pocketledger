@@ -49,6 +49,7 @@ import com.pocketledger.ui.util.DateLabels
 fun HomeScreen(
     viewModel: HomeViewModel,
     contentPadding: PaddingValues,
+    onOpenTransaction: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -61,6 +62,7 @@ fun HomeScreen(
         onTapAllowance = viewModel::openAllowanceDialog,
         onToggleView = viewModel::toggleViewMode,
         onSelectDay = viewModel::selectDay,
+        onOpenTransaction = onOpenTransaction,
         modifier = modifier,
     )
 
@@ -83,6 +85,7 @@ private fun HomeContent(
     onTapAllowance: () -> Unit,
     onToggleView: () -> Unit,
     onSelectDay: (String?) -> Unit,
+    onOpenTransaction: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -140,7 +143,9 @@ private fun HomeContent(
 
         state.visibleDayGroups.forEach { group ->
             item(key = "day-${group.dateKey}") { DayHeader(group) }
-            items(group.rows, key = { "txn-${it.id}" }) { row -> TransactionRowItem(row) }
+            items(group.rows, key = { "txn-${it.id}" }) { row ->
+                TransactionRowItem(row = row, onClick = { onOpenTransaction(row.id) })
+            }
         }
     }
 }
@@ -422,7 +427,7 @@ private fun DayHeader(group: DayGroup) {
 }
 
 @Composable
-private fun TransactionRowItem(row: TxnRow) {
+private fun TransactionRowItem(row: TxnRow, onClick: () -> Unit) {
     val ledger = LedgerTheme.colors
     val type = runCatching { TxnType.valueOf(row.type) }.getOrDefault(TxnType.EXPENSE)
     val accent = when (type) {
@@ -448,7 +453,9 @@ private fun TransactionRowItem(row: TxnRow) {
     ).joinToString(" · ")
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {

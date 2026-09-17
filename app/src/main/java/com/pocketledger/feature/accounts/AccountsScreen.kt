@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -36,8 +38,8 @@ import com.pocketledger.ui.theme.MoneyTextStyles
 /**
  * Account list with derived balances.
  *
- * Credit cards are pulled out into their own total because "you have ¥8,000" reads
- * very differently once ¥3,000 of it is owed.
+ * Credit-card debt is reported separately, because "you have ¥8,000" reads very
+ * differently once ¥3,000 of it is owed.
  */
 @Composable
 fun AccountsScreen(
@@ -57,12 +59,39 @@ fun AccountsScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item(key = "header") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "账户",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable { viewModel.createAccount() }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                ) {
+                    Text(
+                        text = "添加",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+        }
+
         item(key = "networth") { NetWorthCard(state) }
 
         if (state.accounts.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = "还没有账户，去「我的」里添加",
+                    text = "还没有账户，点右上角「添加」建一个",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 32.dp),
@@ -71,8 +100,17 @@ fun AccountsScreen(
         }
 
         items(state.accounts, key = { it.account.id }) { row ->
-            AccountCard(row)
+            AccountCard(row = row, onClick = { viewModel.editAccount(row.account) })
         }
+    }
+
+    if (state.editorVisible) {
+        AccountEditorDialog(
+            existing = state.editorTarget,
+            onDismiss = viewModel::dismissEditor,
+            onSave = viewModel::saveAccount,
+            onArchive = viewModel::toggleArchive,
+        )
     }
 }
 
@@ -100,7 +138,7 @@ private fun NetWorthCard(state: AccountsUiState) {
             Spacer(Modifier.height(12.dp))
             Row {
                 StatPill("资产", Money.format(state.assetsCents), LedgerTheme.colors.income)
-                Spacer(Modifier.size(10.dp))
+                Spacer(Modifier.width(14.dp))
                 StatPill("负债", Money.format(state.liabilitiesCents), LedgerTheme.colors.expense)
             }
         }
@@ -116,7 +154,7 @@ private fun StatPill(label: String, amount: String, accent: Color) {
                 .clip(CircleShape)
                 .background(accent)
         )
-        Spacer(Modifier.size(6.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
             text = "$label $amount",
             style = MoneyTextStyles.Small,
@@ -126,12 +164,13 @@ private fun StatPill(label: String, amount: String, accent: Color) {
 }
 
 @Composable
-private fun AccountCard(row: AccountRow) {
+private fun AccountCard(row: AccountRow, onClick: () -> Unit) {
     val accent = Color(row.account.colorArgb)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { /* account detail lands with the transfer feature */ },
+            .alpha(if (row.account.isArchived) 0.55f else 1f)
+            .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -153,7 +192,7 @@ private fun AccountCard(row: AccountRow) {
                     color = accent,
                 )
             }
-            Spacer(Modifier.size(12.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = row.account.name,
@@ -161,7 +200,7 @@ private fun AccountCard(row: AccountRow) {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = accountTypeLabel(row.account.type),
+                    text = accountSubtitle(row.account),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -175,6 +214,18 @@ private fun AccountCard(row: AccountRow) {
                 },
             )
         }
+    }
+}
+
+private fun accountSubtitle(account: com.pocketledger.data.entity.AccountEntity): String {
+    val typeLabel = accountTypeLabel(account.type)
+    return when {
+        account.isArchived -> "$typeLabel · 已归档"
+        !account.includeInTotal -> "$typeLabel · 不计入总资产"
+        account.type == AccountType.CREDIT_CARD && account.repayDay != null ->
+            "$typeLabel · 每月 ${account.repayDay} 日还款"
+
+        else -> typeLabel
     }
 }
 

@@ -25,6 +25,10 @@ interface AccountDao {
     @Query("SELECT * FROM account WHERE id = :id")
     suspend fun byId(id: Long): AccountEntity?
 
+    /** One-shot read for form screens that need the list once, not a subscription. */
+    @Query("SELECT * FROM account WHERE deletedAt IS NULL ORDER BY isArchived ASC, sortOrder ASC, id ASC")
+    suspend fun all(): List<AccountEntity>
+
     @Query("SELECT COUNT(*) FROM account WHERE deletedAt IS NULL")
     suspend fun count(): Int
 

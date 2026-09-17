@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.Money
@@ -49,11 +50,14 @@ private val KEYPAD_ROWS = listOf(
 )
 
 /**
- * Keypad-first entry.
+ * Keypad-first entry for all three movements.
  *
  * The custom keypad replaces the system IME on purpose: it keeps the amount field,
- * the category grid and the account picker all visible at once, so a routine
- * entry never scrolls or fights a keyboard.
+ * the category grid and the account picker visible at once, so a routine entry
+ * never scrolls and never fights a keyboard.
+ *
+ * A transfer swaps the category grid for a from/to pair, because moving money
+ * between your own accounts is not a category of spending.
  */
 @Composable
 fun EntryScreen(
@@ -78,41 +82,55 @@ fun EntryScreen(
 
         AmountDisplay(amountInput = state.amountInput, type = state.type)
 
-        if (state.type == TxnType.EXPENSE && state.mainCategories.size > 1) {
-            MainCategoryTabs(
-                categories = state.mainCategories,
-                selectedId = state.selectedMainCategoryId,
-                onSelect = viewModel::selectMainCategory,
+        if (state.isTransfer) {
+            TransferPanel(
+                accounts = state.accounts,
+                fromId = state.selectedAccountId,
+                toId = state.selectedToAccountId,
+                feeInput = state.feeInput,
+                onSelectFrom = viewModel::selectAccount,
+                onSelectTo = viewModel::selectToAccount,
+                onFeeChange = viewModel::setFee,
+                modifier = Modifier.weight(1f),
             )
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items(state.orderedCategories, key = { it.id }) { category ->
-                CategoryCell(
-                    category = category,
-                    selected = category.id == state.selectedCategoryId,
-                    onClick = { viewModel.selectCategory(category.id) },
+        } else {
+            if (state.type == TxnType.EXPENSE && state.mainCategories.size > 1) {
+                MainCategoryTabs(
+                    categories = state.mainCategories,
+                    selectedId = state.selectedMainCategoryId,
+                    onSelect = viewModel::selectMainCategory,
                 )
             }
-        }
 
-        AccountPicker(
-            accounts = state.accounts,
-            selectedId = state.selectedAccountId,
-            onSelect = viewModel::selectAccount,
-        )
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                items(state.orderedCategories, key = { it.id }) { category ->
+                    CategoryCell(
+                        category = category,
+                        selected = category.id == state.selectedCategoryId,
+                        onClick = { viewModel.selectCategory(category.id) },
+                    )
+                }
+            }
+
+            AccountPicker(
+                accounts = state.accounts,
+                selectedId = state.selectedAccountId,
+                onSelect = viewModel::selectAccount,
+            )
+        }
 
         NoteField(
             note = state.note,
             merchant = state.merchant,
+            showMerchant = !state.isTransfer,
             onNoteChange = viewModel::setNote,
             onMerchantChange = viewModel::setMerchant,
         )
@@ -159,7 +177,7 @@ private fun EntryHeader(
             )
         }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
         TypeSwitch(type = type, onTypeChange = onTypeChange)
         Spacer(Modifier.weight(1f))
 
@@ -169,12 +187,12 @@ private fun EntryHeader(
                 style = MaterialTheme.typography.labelMedium,
                 color = LedgerTheme.colors.income,
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
         }
 
         Text(
             text = DateLabels.dayLabel(dateKey),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -187,18 +205,15 @@ private fun TypeSwitch(type: TxnType, onTypeChange: (TxnType) -> Unit) {
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        TypePill(
-            label = "支出",
-            selected = type == TxnType.EXPENSE,
-            accent = LedgerTheme.colors.expense,
-            onClick = { onTypeChange(TxnType.EXPENSE) },
-        )
-        TypePill(
-            label = "收入",
-            selected = type == TxnType.INCOME,
-            accent = LedgerTheme.colors.income,
-            onClick = { onTypeChange(TxnType.INCOME) },
-        )
+        TypePill("支出", type == TxnType.EXPENSE, LedgerTheme.colors.expense) {
+            onTypeChange(TxnType.EXPENSE)
+        }
+        TypePill("收入", type == TxnType.INCOME, LedgerTheme.colors.income) {
+            onTypeChange(TxnType.INCOME)
+        }
+        TypePill("转账", type == TxnType.TRANSFER, LedgerTheme.colors.transfer) {
+            onTypeChange(TxnType.TRANSFER)
+        }
     }
 }
 
@@ -214,7 +229,7 @@ private fun TypePill(
             .clip(CircleShape)
             .background(if (selected) accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp, vertical = 7.dp),
     ) {
         Text(
             text = label,
@@ -243,6 +258,123 @@ private fun AmountDisplay(amountInput: String, type: TxnType) {
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * From / to account pickers plus an optional fee.
+ *
+ * The fee lives here rather than in the category grid because a transfer fee is a
+ * real cost that leaves the source account -- it counts as an expense in reports
+ * even though the transferred principal does not.
+ */
+@Composable
+private fun TransferPanel(
+    accounts: List<AccountEntity>,
+    fromId: Long?,
+    toId: Long?,
+    feeInput: String,
+    onSelectFrom: (Long) -> Unit,
+    onSelectTo: (Long) -> Unit,
+    onFeeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AccountLine(
+            label = "从",
+            accounts = accounts,
+            selectedId = fromId,
+            onSelect = onSelectFrom,
+        )
+        AccountLine(
+            label = "到",
+            accounts = accounts.filter { it.id != fromId },
+            selectedId = toId,
+            onSelect = onSelectTo,
+            emptyHint = "需要至少两个账户才能转账",
+        )
+        OutlinedTextField(
+            value = feeInput,
+            onValueChange = onFeeChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("手续费（可留空）", style = MaterialTheme.typography.bodySmall) },
+            prefix = { Text("¥") },
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            text = "转账不计入收支，只有手续费算支出。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AccountLine(
+    label: String,
+    accounts: List<AccountEntity>,
+    selectedId: Long?,
+    onSelect: (Long) -> Unit,
+    emptyHint: String? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(22.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        if (accounts.isEmpty()) {
+            Text(
+                text = emptyHint ?: "没有可用账户",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                accounts.forEach { account ->
+                    AccountChip(
+                        account = account,
+                        selected = account.id == selectedId,
+                        onClick = { onSelect(account.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountChip(account: AccountEntity, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceContainer
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = account.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }
@@ -331,7 +463,7 @@ private fun CategoryCell(
 
 @Composable
 private fun AccountPicker(
-    accounts: List<com.pocketledger.data.entity.AccountEntity>,
+    accounts: List<AccountEntity>,
     selectedId: Long?,
     onSelect: (Long) -> Unit,
 ) {
@@ -345,27 +477,11 @@ private fun AccountPicker(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         accounts.forEach { account ->
-            val selected = account.id == selectedId
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainer
-                    )
-                    .clickable { onSelect(account.id) }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-            ) {
-                Text(
-                    text = account.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
+            AccountChip(
+                account = account,
+                selected = account.id == selectedId,
+                onClick = { onSelect(account.id) },
+            )
         }
     }
 }
@@ -374,6 +490,7 @@ private fun AccountPicker(
 private fun NoteField(
     note: String,
     merchant: String,
+    showMerchant: Boolean,
     onNoteChange: (String) -> Unit,
     onMerchantChange: (String) -> Unit,
 ) {
@@ -383,14 +500,16 @@ private fun NoteField(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedTextField(
-            value = merchant,
-            onValueChange = onMerchantChange,
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-            placeholder = { Text("商家", style = MaterialTheme.typography.bodySmall) },
-            textStyle = MaterialTheme.typography.bodySmall,
-        )
+        if (showMerchant) {
+            OutlinedTextField(
+                value = merchant,
+                onValueChange = onMerchantChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                placeholder = { Text("商家", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodySmall,
+            )
+        }
         OutlinedTextField(
             value = note,
             onValueChange = onNoteChange,
@@ -453,7 +572,16 @@ private fun SaveButton(
     type: TxnType,
     onSave: () -> Unit,
 ) {
-    val accent = if (type == TxnType.INCOME) LedgerTheme.colors.income else MaterialTheme.colorScheme.primary
+    val ledger = LedgerTheme.colors
+    val accent = when (type) {
+        TxnType.INCOME -> ledger.income
+        TxnType.TRANSFER -> ledger.transfer
+        TxnType.EXPENSE -> MaterialTheme.colorScheme.primary
+    }
+    val hint = when (type) {
+        TxnType.TRANSFER -> "选择转出和转入账户"
+        else -> "选择分类和账户"
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -468,9 +596,10 @@ private fun SaveButton(
     ) {
         Text(
             text = if (enabled) {
-                "保存 ${Money.formatWithSymbol(amountCents)}"
+                val verb = if (type == TxnType.TRANSFER) "转账" else "保存"
+                "$verb ${Money.formatWithSymbol(amountCents)}"
             } else {
-                "选择分类和账户"
+                hint
             },
             style = MaterialTheme.typography.titleMedium,
             color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
