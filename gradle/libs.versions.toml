@@ -1,7 +1,11 @@
 [versions]
 # Verified live against Google Maven / Maven Central on 2026-09-16.
 # KSP 2.3.12 is built against Kotlin 2.3.20 -- do NOT bump Kotlin to 2.4.x without KSP 2.4.x.
-agp = "8.13.2"
+#
+# AGP 9.x is required, not optional: current AndroidX artifacts (core 1.19.0,
+# compose 1.12.1, lifecycle 2.11.0, navigation 2.10.1) declare minCompileSdk=37
+# and minAgpVersion=9.1.0 in their AAR metadata. AGP 8.13.2 caps compileSdk at 36.
+agp = "9.4.0"
 kotlin = "2.3.20"
 ksp = "2.3.12"
 composeBom = "2026.09.00"

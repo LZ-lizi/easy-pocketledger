@@ -2,7 +2,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // AGP 9 supplies Kotlin itself -- applying org.jetbrains.kotlin.android here
+    // is now an error. See https://kotl.in/gradle/agp-built-in-kotlin
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -10,17 +11,14 @@ plugins {
 
 android {
     namespace = "com.pocketledger"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.pocketledger"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
-
-        // No multi-APK, no locale splits: this is a single-user Chinese app.
-        resourceConfigurations += listOf("zh", "en")
     }
 
     buildTypes {
@@ -62,7 +60,9 @@ android {
     }
 
     androidResources {
-        // Keep the APK lean: MiSans is bundled as a subset.
+        // Single-user Chinese app: drop the other ~80 locales' resources, and
+        // keep MiSans (a bundled subset) as the only font source.
+        localeFilters += listOf("zh", "en")
         generateLocaleConfig = false
     }
 }
