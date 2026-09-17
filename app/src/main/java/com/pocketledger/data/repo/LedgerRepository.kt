@@ -52,6 +52,14 @@ class LedgerRepository(
     fun observeCategories(kind: CategoryKind): Flow<List<CategoryEntity>> =
         categoryDao.observeByKind(kind)
 
+    /**
+     * Every category in one flow.
+     *
+     * The entry screen switches between expense and income in place, so observing
+     * both kinds once avoids tearing down and rebuilding a query on every toggle.
+     */
+    fun observeAllCategories(): Flow<List<CategoryEntity>> = categoryDao.observeAll()
+
     suspend fun categories(kind: CategoryKind): List<CategoryEntity> = categoryDao.all()
         .filter { it.kind == kind }
 

@@ -46,7 +46,8 @@ object Money {
      * keep the Save button disabled rather than storing a guess.
      */
     fun parseYuanToCents(input: String): Long? {
-        val text = input.trim()
+        // Tolerate pasted amounts: "¥1,240.50" must parse exactly like "1240.50".
+        val text = input.trim().removePrefix("¥").replace(",", "").trim()
         if (text.isEmpty() || text == ".") return null
         val parts = text.split('.')
         if (parts.size > 2) return null

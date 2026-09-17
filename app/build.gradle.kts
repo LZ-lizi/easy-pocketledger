@@ -106,4 +106,8 @@ dependencies {
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+
+    // The money/allowance maths is pure Kotlin, so it is verified by unit tests
+    // that need no device -- the only automated check available without hardware.
+    testImplementation(libs.junit)
 }
