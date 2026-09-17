@@ -48,6 +48,9 @@ interface CategoryDao {
     @Query("SELECT COUNT(*) FROM category")
     suspend fun count(): Int
 
+    @Query("SELECT COUNT(*) FROM category WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
+    suspend fun countForLedger(ledgerId: Long): Int
+
     @Insert
     suspend fun insert(category: CategoryEntity): Long
 

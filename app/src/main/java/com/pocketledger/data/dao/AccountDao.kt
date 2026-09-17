@@ -32,6 +32,9 @@ interface AccountDao {
     @Query("SELECT COUNT(*) FROM account WHERE deletedAt IS NULL")
     suspend fun count(): Int
 
+    @Query("SELECT COUNT(*) FROM account WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
+    suspend fun countForLedger(ledgerId: Long): Int
+
     /**
      * Derives every balance in one pass.
      *

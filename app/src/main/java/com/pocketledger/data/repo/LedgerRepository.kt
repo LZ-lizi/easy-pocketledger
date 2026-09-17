@@ -6,6 +6,8 @@ import com.pocketledger.data.dao.AllowanceDao
 import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.CategoryTotal
 import com.pocketledger.data.dao.DayTotal
+import com.pocketledger.data.dao.InstallmentDao
+import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
@@ -17,10 +19,14 @@ import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AllowanceEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.domain.DateKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Single entry point to the data layer.
@@ -32,13 +38,51 @@ import kotlinx.coroutines.flow.Flow
  * types returned here.
  */
 class LedgerRepository(
+    private val ledgerDao: LedgerDao,
     private val accountDao: AccountDao,
     private val categoryDao: CategoryDao,
     private val txnDao: TxnDao,
     private val allowanceDao: AllowanceDao,
     private val tagDao: TagDao,
     private val termDao: TermDao,
+    private val installmentDao: InstallmentDao,
 ) {
+
+    /**
+     * Which ledger every screen is currently showing.
+     *
+     * Held here rather than passed down from each call site so that switching a
+     * ledger is a single write, and every observing screen reloads by itself.
+     * Screens `flatMapLatest` on it; a `null` value means onboarding has not run yet.
+     */
+    private val currentLedgerId = MutableStateFlow<Long?>(null)
+    val selectedLedgerId: StateFlow<Long?> = currentLedgerId.asStateFlow()
+
+    fun selectLedger(id: Long) {
+        currentLedgerId.value = id
+    }
+
+    // --------------------------------------------------------------------- ledgers
+
+    fun observeLedgers(): Flow<List<LedgerEntity>> = ledgerDao.observeAll()
+
+    suspend fun ledgers(): List<LedgerEntity> = ledgerDao.all()
+
+    suspend fun ledger(id: Long): LedgerEntity? = ledgerDao.byId(id)
+
+    suspend fun ledgerCount(): Int = ledgerDao.count()
+
+    suspend fun ledgerMaxSortOrder(): Int = ledgerDao.maxSortOrder()
+
+    suspend fun addLedger(ledger: LedgerEntity): Long = ledgerDao.insert(ledger)
+
+    suspend fun updateLedger(ledger: LedgerEntity) {
+        ledgerDao.update(ledger.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun setLedgerArchived(id: Long, archived: Boolean) = ledgerDao.setArchived(id, archived)
+
+    suspend fun deleteLedger(id: Long) = ledgerDao.softDelete(id)
 
     // ------------------------------------------------------------------ accounts
 

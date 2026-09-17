@@ -210,4 +210,8 @@ interface TxnDao {
 
     @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL")
     suspend fun count(): Int
+
+    /** Unscoped on purpose: used once at startup to detect pre-ledger data. */
+    @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL")
+    suspend fun countAll(): Int
 }
