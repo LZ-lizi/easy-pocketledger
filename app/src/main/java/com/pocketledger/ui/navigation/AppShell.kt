@@ -30,6 +30,8 @@ import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
 import com.pocketledger.feature.home.HomeViewModel
 import com.pocketledger.feature.settings.SettingsScreen
+import com.pocketledger.feature.settings.TermSettingsScreen
+import com.pocketledger.feature.settings.TermSettingsViewModel
 import com.pocketledger.feature.stats.StatsScreen
 import com.pocketledger.feature.stats.StatsViewModel
 import com.pocketledger.ui.components.LedgerIcon
@@ -44,6 +46,7 @@ object Routes {
     const val ENTRY = "entry"
     const val EDIT = "edit"
     const val EDIT_ARG = "txnId"
+    const val TERMS = "terms"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
 }
@@ -129,7 +132,20 @@ fun AppShell() {
             }
 
             composable(Routes.SETTINGS) {
-                SettingsScreen(contentPadding = padding)
+                SettingsScreen(
+                    contentPadding = padding,
+                    onOpenTerms = { navController.navigate(Routes.TERMS) },
+                )
+            }
+
+            composable(Routes.TERMS) {
+                val viewModel: TermSettingsViewModel =
+                    viewModel(factory = TermSettingsViewModel.Factory)
+                TermSettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
             }
 
             composable(Routes.ENTRY) {

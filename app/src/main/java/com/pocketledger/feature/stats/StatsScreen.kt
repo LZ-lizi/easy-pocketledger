@@ -2,6 +2,7 @@ package com.pocketledger.feature.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.ChartSlice
+import com.pocketledger.ui.components.DonutChart
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 
@@ -64,15 +68,39 @@ fun StatsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.weight(1f))
-                MonthStepper(
-                    label = state.monthLabel,
-                    onPrevious = viewModel::previousMonth,
-                    onNext = viewModel::nextMonth,
+                Text(
+                    text = state.rangeLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
 
+        item(key = "mode") {
+            ModeChips(mode = state.mode, onSelect = viewModel::setMode)
+        }
+
+        when (state.mode) {
+            StatsRangeMode.MONTH -> item(key = "month") {
+                MonthStepper(
+                    label = state.rangeLabel,
+                    onPrevious = viewModel::previousMonth,
+                    onNext = viewModel::nextMonth,
+                )
+            }
+
+            StatsRangeMode.TERM -> item(key = "terms") {
+                TermPicker(state = state, onSelect = viewModel::selectTerm)
+            }
+
+            else -> Unit
+        }
+
         item(key = "totals") { TotalsCard(state) }
+
+        if (state.hasExpense && state.donutSlices.isNotEmpty()) {
+            item(key = "donut") { DonutCard(state) }
+        }
 
         item(key = "split") { DailyVsLeisureCard(state) }
 
@@ -93,10 +121,100 @@ fun StatsScreen(
         } else {
             item(key = "empty") {
                 Text(
-                    text = "这个月还没有支出记录",
+                    text = "这段时间还没有支出记录",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 32.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeChips(mode: StatsRangeMode, onSelect: (StatsRangeMode) -> Unit) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StatsRangeMode.entries.forEach { candidate ->
+            val selected = candidate == mode
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceContainer
+                    )
+                    .clickable { onSelect(candidate) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = candidate.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TermPicker(state: StatsUiState, onSelect: (Long) -> Unit) {
+    if (state.needsTermSetup) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = "还没有设置学期",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "去「我的 → 学期设置」添加一个日期区间（比如 2026 秋季学期：9月1日 到 1月15日），" +
+                        "这里就能按学期看总账了。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        return
+    }
+
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        state.terms.forEach { term ->
+            val selected = term.id == state.selectedTermId
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainer
+                    )
+                    .clickable { onSelect(term.id) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = term.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
@@ -109,9 +227,9 @@ private fun MonthStepper(label: String, onPrevious: () -> Unit, onNext: () -> Un
         StepChip("‹", onPrevious)
         Text(
             text = label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp),
         )
         StepChip("›", onNext)
     }
@@ -146,7 +264,7 @@ private fun TotalsCard(state: StatsUiState) {
     ) {
         Column(Modifier.padding(20.dp)) {
             Text(
-                text = "本月结余",
+                text = "结余",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -186,9 +304,93 @@ private fun LabelledAmount(label: String, cents: Long, accent: Color) {
 }
 
 /**
- * The headline comparison the whole classification exists for: how much of this
- * month was unavoidable versus optional.
+ * Category donut with its legend.
+ *
+ * Wedge colours come from each category's own stored colour, so a category keeps
+ * the same identity here, in the ledger list and on the entry keypad.
  */
+@Composable
+private fun DonutCard(state: StatsUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Text(
+                text = "支出构成",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                DonutChart(
+                    slices = state.donutSlices.map {
+                        ChartSlice(label = it.name, value = it.totalCents, color = Color(it.colorArgb))
+                    },
+                    diameter = 176.dp,
+                    thickness = 22.dp,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "支出",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = Money.formatCompact(state.totals.expenseCents),
+                            style = MoneyTextStyles.Large,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            state.donutSlices.forEach { slice ->
+                LegendRow(slice)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendRow(slice: CategoryRank) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(Color(slice.colorArgb))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = slice.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "${(slice.share * 100).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = Money.formatWithSymbol(slice.totalCents),
+            style = MoneyTextStyles.Small,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun DailyVsLeisureCard(state: StatsUiState) {
     val ledger = LedgerTheme.colors
@@ -205,7 +407,6 @@ private fun DailyVsLeisureCard(state: StatsUiState) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(12.dp))
-
             SplitRow("日常生活", state.dailyCents, total, ledger.daily)
             Spacer(Modifier.height(10.dp))
             SplitRow("娱乐开销", state.leisureCents, total, ledger.leisure)

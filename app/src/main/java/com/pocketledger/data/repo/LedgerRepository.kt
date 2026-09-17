@@ -10,12 +10,14 @@ import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.TagDao
+import com.pocketledger.data.dao.TermDao
 import com.pocketledger.data.dao.TxnDao
 import com.pocketledger.data.dao.TxnRow
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AllowanceEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.domain.DateKeys
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +37,7 @@ class LedgerRepository(
     private val txnDao: TxnDao,
     private val allowanceDao: AllowanceDao,
     private val tagDao: TagDao,
+    private val termDao: TermDao,
 ) {
 
     // ------------------------------------------------------------------ accounts
@@ -201,4 +204,25 @@ class LedgerRepository(
     fun observeTags() = tagDao.observeAll()
 
     suspend fun tagsFor(txnId: Long) = tagDao.tagsFor(txnId)
+
+    // ---------------------------------------------------------------------- terms
+
+    /** Terms back the statistics page's 「学期」 time range. */
+    fun observeTerms(): Flow<List<TermEntity>> = termDao.observeAll()
+
+    suspend fun terms(): List<TermEntity> = termDao.all()
+
+    suspend fun term(id: Long): TermEntity? = termDao.byId(id)
+
+    suspend fun addTerm(term: TermEntity): Long = termDao.insert(term)
+
+    suspend fun updateTerm(term: TermEntity) = termDao.update(term)
+
+    suspend fun deleteTerm(id: Long) = termDao.delete(id)
+
+    /** At most one term is pre-selected, so the picker has an obvious default. */
+    suspend fun setActiveTerm(id: Long) {
+        termDao.clearActive()
+        termDao.byId(id)?.let { termDao.update(it.copy(isActive = true)) }
+    }
 }

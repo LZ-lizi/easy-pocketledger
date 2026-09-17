@@ -7,10 +7,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
 import com.pocketledger.data.Presets
+import com.pocketledger.data.dao.CategoryTotal
+import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.domain.DateKeys
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,65 +25,116 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
-/** One row of the spending ranking. */
+/**
+ * The statistical window.
+ *
+ * Deliberately a small set of presets rather than a free date-range picker: the
+ * three questions actually asked of a ledger are "this month", "this term" and
+ * "how has this year gone", and a picker answers none of them faster.
+ */
+enum class StatsRangeMode(val label: String) {
+    MONTH("本月"),
+    LAST_30_DAYS("近30天"),
+    YEAR("今年"),
+    TERM("学期"),
+}
+
+/** One row of the spending ranking, also used to build the donut's wedges. */
 data class CategoryRank(
     val id: Long,
     val name: String,
     val colorArgb: Int,
     val totalCents: Long,
-    /** Share of the month's total expense, 0f..1f. */
+    /** Share of the period's total expense, 0f..1f. */
     val share: Float,
 )
 
 data class StatsUiState(
+    val mode: StatsRangeMode = StatsRangeMode.MONTH,
     val monthKey: String = DateKeys.monthKey(LocalDate.now()),
-    val monthLabel: String = DateKeys.monthLabel(DateKeys.monthKey(LocalDate.now())),
+    val rangeLabel: String = DateKeys.monthLabel(DateKeys.monthKey(LocalDate.now())),
+    val rangeStartKey: String = "",
+    val rangeEndKey: String = "",
+    val terms: List<TermEntity> = emptyList(),
+    val selectedTermId: Long? = null,
     val totals: PeriodTotals = PeriodTotals(0, 0),
     val dailyCents: Long = 0,
     val leisureCents: Long = 0,
     val topCategories: List<CategoryRank> = emptyList(),
-    /** Oldest to newest, for the trend chart. */
+    /** Top wedges plus an aggregated 「其他」; what the donut draws. */
+    val donutSlices: List<CategoryRank> = emptyList(),
     val months: List<MonthTotal> = emptyList(),
+) {
+    val hasExpense: Boolean get() = totals.expenseCents > 0L
+
+    /** True when 学期 is selected but no term has been defined yet. */
+    val needsTermSetup: Boolean
+        get() = mode == StatsRangeMode.TERM && terms.isEmpty()
+}
+
+internal data class StatsSelection(
+    val mode: StatsRangeMode,
+    val monthKey: String,
+    val termId: Long?,
+    val terms: List<TermEntity>,
 )
 
 private const val TREND_MONTHS = 6
 private const val RANKING_SIZE = 8
+private const val DONUT_SLICES = 6
 
 /**
- * Statistics for one month: totals, the 日常 / 娱乐 split, a six-month trend and a
- * category ranking.
+ * Statistics for the selected window: totals, the 日常 / 娱乐 split, a category
+ * donut, a six-month trend and a ranking.
  *
- * Every figure comes from a SQL aggregate. Nothing loads the ledger into memory,
+ * Every figure comes from a SQL aggregate; nothing loads the ledger into memory,
  * which is what keeps this screen fast as the database grows.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
 
+    private val mode = MutableStateFlow(StatsRangeMode.MONTH)
     private val monthKey = MutableStateFlow(DateKeys.monthKey(LocalDate.now()))
+    private val selectedTermId = MutableStateFlow<Long?>(null)
 
-    val uiState: StateFlow<StatsUiState> = monthKey.flatMapLatest { key ->
-        val (monthStart, monthEnd) = DateKeys.monthRange(key)
-        val trendStart = DateKeys.parseMonthKey(key).minusMonths((TREND_MONTHS - 1).toLong())
-            .atDay(1).toString()
+    val uiState: StateFlow<StatsUiState> = combine(
+        mode,
+        monthKey,
+        selectedTermId,
+        repository.observeTerms(),
+    ) { currentMode, currentMonth, termId, terms ->
+        StatsSelection(currentMode, currentMonth, termId, terms)
+    }.flatMapLatest { selection ->
+        val today = LocalDate.now()
+        val (startKey, endKey, label) = resolveRange(selection, today)
+        // The trend always ends with the selected window, so the chart stays in context.
+        val trendStart = DateKeys.parseMonthKey(endKey.take(7))
+            .minusMonths((TREND_MONTHS - 1).toLong())
+            .atDay(1)
+            .toString()
 
         combine(
-            repository.observeTotals(key),
-            repository.observeMainCategoryTotals(key),
+            repository.observeTotals(startKey, endKey),
+            repository.observeMainCategoryTotals(startKey, endKey),
+            repository.observeCategoryTotals(startKey, endKey),
+            repository.observeMonthTotals(trendStart, endKey),
             repository.observeCategories(CategoryKind.EXPENSE),
-            combine(
-                repository.observeCategoryTotals(monthStart, monthEnd),
-                repository.observeMonthTotals(trendStart, monthEnd),
-            ) { categoryTotals, months -> categoryTotals to months },
-        ) { totals, mainTotals, categories, extra ->
-            val (categoryTotals, months) = extra
+        ) { totals, mainTotals, categoryTotals, months, categories ->
             val (daily, leisure) = splitMainTotals(mainTotals, categories)
+            val ranking = buildRanking(categoryTotals, categories, totals.expenseCents, RANKING_SIZE)
             StatsUiState(
-                monthKey = key,
-                monthLabel = DateKeys.monthLabel(key),
+                mode = selection.mode,
+                monthKey = selection.monthKey,
+                rangeLabel = label,
+                rangeStartKey = startKey,
+                rangeEndKey = endKey,
+                terms = selection.terms,
+                selectedTermId = selection.termId ?: selection.terms.firstOrNull()?.id,
                 totals = totals,
                 dailyCents = daily,
                 leisureCents = leisure,
-                topCategories = buildRanking(categoryTotals, categories, totals.expenseCents),
+                topCategories = ranking,
+                donutSlices = collapseTail(ranking, totals.expenseCents),
                 months = months,
             )
         }
@@ -89,6 +143,15 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = StatsUiState(),
     )
+
+    /** Selecting 学期 with no term defined yet falls back to the month window. */
+    fun setMode(next: StatsRangeMode) {
+        mode.value = next
+    }
+
+    fun selectTerm(id: Long) {
+        selectedTermId.value = id
+    }
 
     fun previousMonth() {
         monthKey.value = DateKeys.parseMonthKey(monthKey.value).minusMonths(1).toString()
@@ -109,8 +172,43 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
     }
 }
 
-private fun splitMainTotals(
-    totals: List<com.pocketledger.data.dao.MainCategoryTotal>,
+/** Inclusive `start..end` date keys plus a human label for the chosen window. */
+internal fun resolveRange(
+    selection: StatsSelection,
+    today: LocalDate,
+): Triple<String, String, String> = when (selection.mode) {
+    StatsRangeMode.MONTH -> {
+        val (start, end) = DateKeys.monthRange(selection.monthKey)
+        Triple(start, end, DateKeys.monthLabel(selection.monthKey))
+    }
+
+    StatsRangeMode.LAST_30_DAYS -> Triple(
+        today.minusDays(29).toString(),
+        today.toString(),
+        "近 30 天",
+    )
+
+    StatsRangeMode.YEAR -> {
+        val (start, end) = DateKeys.yearRange(today.year)
+        Triple(start, end, "${today.year} 年")
+    }
+
+    StatsRangeMode.TERM -> {
+        val term = selection.terms.firstOrNull { it.id == selection.termId }
+            ?: selection.terms.firstOrNull()
+        if (term == null) {
+            // Falls back to the month window so the screen is never blank just
+            // because no term has been defined yet.
+            val (start, end) = DateKeys.monthRange(selection.monthKey)
+            Triple(start, end, DateKeys.monthLabel(selection.monthKey))
+        } else {
+            Triple(term.startDateKey, term.endDateKey, term.name)
+        }
+    }
+}
+
+internal fun splitMainTotals(
+    totals: List<MainCategoryTotal>,
     categories: List<CategoryEntity>,
 ): Pair<Long, Long> {
     val dailyId = categories.firstOrNull { it.systemKey == Presets.KEY_DAILY }?.id
@@ -126,12 +224,13 @@ private fun splitMainTotals(
     return daily to leisure
 }
 
-private fun buildRanking(
-    totals: List<com.pocketledger.data.dao.CategoryTotal>,
+internal fun buildRanking(
+    totals: List<CategoryTotal>,
     categories: List<CategoryEntity>,
-    monthExpenseCents: Long,
+    periodExpenseCents: Long,
+    limit: Int,
 ): List<CategoryRank> {
-    if (monthExpenseCents <= 0L) return emptyList()
+    if (periodExpenseCents <= 0L) return emptyList()
     val byId = categories.associateBy { it.id }
     return totals
         .mapNotNull { total ->
@@ -141,9 +240,33 @@ private fun buildRanking(
                 name = category.name,
                 colorArgb = category.colorArgb,
                 totalCents = total.totalCents,
-                share = (total.totalCents.toDouble() / monthExpenseCents.toDouble()).toFloat(),
+                share = (total.totalCents.toDouble() / periodExpenseCents.toDouble()).toFloat(),
             )
         }
         .sortedByDescending { it.totalCents }
-        .take(RANKING_SIZE)
+        .take(limit)
+}
+
+/**
+ * Folds everything past the nth category into a single 「其他」 wedge.
+ *
+ * A donut with twenty hairlines communicates nothing; six named wedges plus a
+ * remainder keeps every slice legible.
+ */
+internal fun collapseTail(ranking: List<CategoryRank>, periodExpenseCents: Long): List<CategoryRank> {
+    if (ranking.size <= DONUT_SLICES) return ranking
+    val head = ranking.take(DONUT_SLICES - 1)
+    val tailTotal = ranking.drop(DONUT_SLICES - 1).sumOf { it.totalCents }
+    if (tailTotal <= 0L) return head
+    return head + CategoryRank(
+        id = -1L,
+        name = "其他",
+        colorArgb = 0xFF94A3B8.toInt(),
+        totalCents = tailTotal,
+        share = if (periodExpenseCents <= 0L) {
+            0f
+        } else {
+            (tailTotal.toDouble() / periodExpenseCents.toDouble()).toFloat()
+        },
+    )
 }

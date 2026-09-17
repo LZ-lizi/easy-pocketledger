@@ -9,6 +9,7 @@ import com.pocketledger.data.dao.AccountDao
 import com.pocketledger.data.dao.AllowanceDao
 import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.TagDao
+import com.pocketledger.data.dao.TermDao
 import com.pocketledger.data.dao.TxnDao
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AllowanceEntity
@@ -56,6 +57,7 @@ abstract class LedgerDatabase : RoomDatabase() {
     abstract fun txnDao(): TxnDao
     abstract fun allowanceDao(): AllowanceDao
     abstract fun tagDao(): TagDao
+    abstract fun termDao(): TermDao
 
     companion object {
         const val NAME = "ledger.db"

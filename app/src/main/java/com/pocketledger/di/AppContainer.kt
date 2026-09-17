@@ -37,6 +37,7 @@ class AppContainer(context: Context) {
             txnDao = db.txnDao(),
             allowanceDao = db.allowanceDao(),
             tagDao = db.tagDao(),
+            termDao = db.termDao(),
         )
     }
 
