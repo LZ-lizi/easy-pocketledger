@@ -59,6 +59,8 @@ fun HomeScreen(
         onPreviousMonth = viewModel::previousMonth,
         onNextMonth = viewModel::nextMonth,
         onTapAllowance = viewModel::openAllowanceDialog,
+        onToggleView = viewModel::toggleViewMode,
+        onSelectDay = viewModel::selectDay,
         modifier = modifier,
     )
 
@@ -79,6 +81,8 @@ private fun HomeContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onTapAllowance: () -> Unit,
+    onToggleView: () -> Unit,
+    onSelectDay: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -95,8 +99,10 @@ private fun HomeContent(
             MonthSwitcher(
                 label = state.monthLabel,
                 isCurrentMonth = state.isCurrentMonth,
+                viewMode = state.viewMode,
                 onPrevious = onPreviousMonth,
                 onNext = onNextMonth,
+                onToggleView = onToggleView,
             )
         }
 
@@ -108,11 +114,31 @@ private fun HomeContent(
             )
         }
 
-        if (state.isEmpty) {
-            item(key = "empty") { EmptyLedgerHint() }
+        if (state.viewMode == HomeViewMode.CALENDAR) {
+            item(key = "calendar") {
+                MonthCalendar(
+                    monthKey = state.monthKey,
+                    dayTotals = state.dayTotals,
+                    selectedDateKey = state.selectedDateKey,
+                    onSelectDay = onSelectDay,
+                )
+            }
         }
 
-        state.dayGroups.forEach { group ->
+        state.selectedDateKey?.let { dayKey ->
+            item(key = "day-filter") {
+                SelectedDayBar(
+                    dateKey = dayKey,
+                    onClear = { onSelectDay(null) },
+                )
+            }
+        }
+
+        if (state.isEmpty) {
+            item(key = "empty") { EmptyLedgerHint(hasDayFilter = state.selectedDateKey != null) }
+        }
+
+        state.visibleDayGroups.forEach { group ->
             item(key = "day-${group.dateKey}") { DayHeader(group) }
             items(group.rows, key = { "txn-${it.id}" }) { row -> TransactionRowItem(row) }
         }
@@ -120,11 +146,40 @@ private fun HomeContent(
 }
 
 @Composable
+private fun SelectedDayBar(dateKey: String, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "只看 ${DateLabels.dayLabel(dateKey)}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = "显示全月",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier
+                .clickable(onClick = onClear)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
 private fun MonthSwitcher(
     label: String,
     isCurrentMonth: Boolean,
+    viewMode: HomeViewMode,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onToggleView: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -137,9 +192,7 @@ private fun MonthSwitcher(
             text = label,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp),
         )
         if (!isCurrentMonth) {
             Text(
@@ -148,10 +201,25 @@ private fun MonthSwitcher(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clickable(onClick = onNext)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
             )
         }
+        Spacer(Modifier.weight(1f))
         StepButton(symbol = "›", onClick = onNext)
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .clickable(onClick = onToggleView)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+        ) {
+            Text(
+                text = if (viewMode == HomeViewMode.CALENDAR) "列表" else "日历",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
@@ -468,7 +536,7 @@ private fun CategoryBadge(label: String, color: Color, muted: Boolean) {
 }
 
 @Composable
-private fun EmptyLedgerHint() {
+private fun EmptyLedgerHint(hasDayFilter: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -476,13 +544,13 @@ private fun EmptyLedgerHint() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "这个月还没有记录",
+            text = if (hasDayFilter) "这天没有记录" else "这个月还没有记录",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "点右下角的按钮开始记一笔",
+            text = if (hasDayFilter) "换一天看看，或点右下角记一笔" else "点右下角的按钮开始记一笔",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

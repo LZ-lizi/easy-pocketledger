@@ -36,6 +36,9 @@ data class DayGroup(
     val expenseCents: Long,
 )
 
+/** The ledger list, or the month grid with the list filtered to the chosen day. */
+enum class HomeViewMode { LIST, CALENDAR }
+
 data class HomeUiState(
     val monthKey: String,
     val monthLabel: String,
@@ -45,10 +48,20 @@ data class HomeUiState(
     val totals: PeriodTotals,
     val dayGroups: List<DayGroup>,
     val dayTotals: Map<String, DayTotal>,
+    val viewMode: HomeViewMode = HomeViewMode.LIST,
+    val selectedDateKey: String? = null,
     val allowanceDialogVisible: Boolean = false,
 ) {
     val isLoading: Boolean get() = allowance == null
-    val isEmpty: Boolean get() = dayGroups.isEmpty()
+
+    /**
+     * The list follows the calendar selection, so tapping a day narrows both the
+     * grid highlight and the rows below it without a second source of truth.
+     */
+    val visibleDayGroups: List<DayGroup>
+        get() = selectedDateKey?.let { key -> dayGroups.filter { it.dateKey == key } } ?: dayGroups
+
+    val isEmpty: Boolean get() = visibleDayGroups.isEmpty()
 }
 
 /**
@@ -63,12 +76,20 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     private val monthKey = MutableStateFlow(DateKeys.monthKey(LocalDate.now()))
     private val allowanceDialog = MutableStateFlow(false)
+    private val viewMode = MutableStateFlow(HomeViewMode.LIST)
+    private val selectedDateKey = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<HomeUiState> = combine(
         monthKey.flatMapLatest { key -> monthStream(key) },
         allowanceDialog,
-    ) { state, dialogVisible ->
-        state.copy(allowanceDialogVisible = dialogVisible)
+        viewMode,
+        selectedDateKey,
+    ) { state, dialogVisible, mode, selected ->
+        state.copy(
+            allowanceDialogVisible = dialogVisible,
+            viewMode = mode,
+            selectedDateKey = selected,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -107,18 +128,34 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     fun previousMonth() {
         monthKey.value = DateKeys.parseMonthKey(monthKey.value).minusMonths(1).toString()
+        selectedDateKey.value = null
     }
 
     fun nextMonth() {
         monthKey.value = DateKeys.parseMonthKey(monthKey.value).plusMonths(1).toString()
+        selectedDateKey.value = null
     }
 
     fun goToCurrentMonth() {
         monthKey.value = DateKeys.monthKey(LocalDate.now())
+        selectedDateKey.value = null
     }
 
     fun showMonth(key: String) {
         monthKey.value = key
+        selectedDateKey.value = null
+    }
+
+    fun toggleViewMode() {
+        viewMode.value = when (viewMode.value) {
+            HomeViewMode.LIST -> HomeViewMode.CALENDAR
+            HomeViewMode.CALENDAR -> HomeViewMode.LIST
+        }
+        if (viewMode.value == HomeViewMode.LIST) selectedDateKey.value = null
+    }
+
+    fun selectDay(dateKey: String?) {
+        selectedDateKey.value = dateKey
     }
 
     fun openAllowanceDialog() {
@@ -145,6 +182,8 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
         totals = PeriodTotals(0, 0),
         dayGroups = emptyList(),
         dayTotals = emptyMap(),
+        viewMode = viewMode.value,
+        selectedDateKey = selectedDateKey.value,
     )
 
     companion object {
