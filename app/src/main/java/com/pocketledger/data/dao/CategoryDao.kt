@@ -11,45 +11,43 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CategoryDao {
 
-    /** Main categories first, then their children, each block in user order. */
+    /** Top-level categories first, then their children, each block in user order. */
     @Query(
         """
         SELECT * FROM category
-        WHERE deletedAt IS NULL
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
         ORDER BY kind ASC, parentId IS NOT NULL ASC, sortOrder ASC, id ASC
         """
     )
-    fun observeAll(): Flow<List<CategoryEntity>>
+    fun observeAll(ledgerId: Long): Flow<List<CategoryEntity>>
 
     @Query(
         """
         SELECT * FROM category
-        WHERE deletedAt IS NULL AND kind = :kind
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND kind = :kind
         ORDER BY parentId IS NOT NULL ASC, sortOrder ASC, id ASC
         """
     )
-    fun observeByKind(kind: CategoryKind): Flow<List<CategoryEntity>>
+    fun observeByKind(ledgerId: Long, kind: CategoryKind): Flow<List<CategoryEntity>>
 
     @Query(
         """
         SELECT * FROM category
-        WHERE deletedAt IS NULL AND parentId IS NULL AND kind = :kind
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+          AND parentId IS NULL AND kind = :kind
         ORDER BY sortOrder ASC, id ASC
         """
     )
-    suspend fun mainCategories(kind: CategoryKind): List<CategoryEntity>
+    suspend fun topLevel(ledgerId: Long, kind: CategoryKind): List<CategoryEntity>
 
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun byId(id: Long): CategoryEntity?
 
-    @Query("SELECT * FROM category WHERE deletedAt IS NULL")
-    suspend fun all(): List<CategoryEntity>
-
-    @Query("SELECT COUNT(*) FROM category")
-    suspend fun count(): Int
+    @Query("SELECT * FROM category WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
+    suspend fun all(ledgerId: Long): List<CategoryEntity>
 
     @Query("SELECT COUNT(*) FROM category WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
-    suspend fun countForLedger(ledgerId: Long): Int
+    suspend fun count(ledgerId: Long): Int
 
     @Insert
     suspend fun insert(category: CategoryEntity): Long
@@ -61,9 +59,8 @@ interface CategoryDao {
     suspend fun update(category: CategoryEntity)
 
     /**
-     * Re-parenting a category is how the user fixes a debatable classification
-     * (say 数码 / 电子 belongs under 日常生活 after all). History follows the
-     * category, so no transaction rows need touching.
+     * Re-parenting a category is how a debatable classification gets fixed. History
+     * follows the category, so no transaction rows need touching.
      */
     @Query("UPDATE category SET parentId = :parentId, updatedAt = :now WHERE id = :id")
     suspend fun moveTo(id: Long, parentId: Long?, now: Long = System.currentTimeMillis())
@@ -71,6 +68,11 @@ interface CategoryDao {
     @Query("UPDATE category SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: Long, now: Long = System.currentTimeMillis())
 
-    @Query("SELECT COALESCE(MAX(sortOrder), 0) FROM category WHERE kind = :kind AND parentId IS :parentId")
-    suspend fun maxSortOrder(kind: CategoryKind, parentId: Long?): Int
+    @Query(
+        """
+        SELECT COALESCE(MAX(sortOrder), 0) FROM category
+        WHERE ledgerId = :ledgerId AND kind = :kind AND parentId IS :parentId
+        """
+    )
+    suspend fun maxSortOrder(ledgerId: Long, kind: CategoryKind, parentId: Long?): Int
 }

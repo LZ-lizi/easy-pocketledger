@@ -17,17 +17,17 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TermDao {
 
-    @Query("SELECT * FROM term ORDER BY startDateKey DESC")
-    fun observeAll(): Flow<List<TermEntity>>
+    @Query("SELECT * FROM term WHERE ledgerId = :ledgerId ORDER BY startDateKey DESC")
+    fun observeAll(ledgerId: Long): Flow<List<TermEntity>>
 
-    @Query("SELECT * FROM term ORDER BY startDateKey DESC")
-    suspend fun all(): List<TermEntity>
+    @Query("SELECT * FROM term WHERE ledgerId = :ledgerId ORDER BY startDateKey DESC")
+    suspend fun all(ledgerId: Long): List<TermEntity>
 
     @Query("SELECT * FROM term WHERE id = :id")
     suspend fun byId(id: Long): TermEntity?
 
-    @Query("SELECT COUNT(*) FROM term")
-    suspend fun count(): Int
+    @Query("SELECT COUNT(*) FROM term WHERE ledgerId = :ledgerId")
+    suspend fun count(ledgerId: Long): Int
 
     @Insert
     suspend fun insert(term: TermEntity): Long
@@ -38,6 +38,6 @@ interface TermDao {
     @Query("DELETE FROM term WHERE id = :id")
     suspend fun delete(id: Long)
 
-    @Query("UPDATE term SET isActive = 0")
-    suspend fun clearActive()
+    @Query("UPDATE term SET isActive = 0 WHERE ledgerId = :ledgerId")
+    suspend fun clearActive(ledgerId: Long)
 }

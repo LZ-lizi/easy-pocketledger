@@ -7,6 +7,10 @@ import androidx.room.Update
 import com.pocketledger.data.entity.TxnEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Every read is scoped to one ledger. Nothing in this app is global: two ledgers
+ * must never contribute to the same total.
+ */
 @Dao
 interface TxnDao {
 
@@ -15,11 +19,12 @@ interface TxnDao {
     @Query(
         """
         SELECT * FROM txn
-        WHERE deletedAt IS NULL AND localDateKey BETWEEN :startKey AND :endKey
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+          AND localDateKey BETWEEN :startKey AND :endKey
         ORDER BY happenedAt DESC, id DESC
         """
     )
-    fun observeRange(startKey: String, endKey: String): Flow<List<TxnEntity>>
+    fun observeRange(ledgerId: Long, startKey: String, endKey: String): Flow<List<TxnEntity>>
 
     /**
      * Ledger rows joined with their category and accounts so the list needs no
@@ -55,7 +60,7 @@ interface TxnDao {
         LEFT JOIN category c ON c.id = t.categoryId
         LEFT JOIN account a ON a.id = t.accountId
         LEFT JOIN account ta ON ta.id = t.toAccountId
-        WHERE t.deletedAt IS NULL
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL
           AND t.localDateKey BETWEEN :startKey AND :endKey
           AND (:accountFilter IS NULL
                OR t.accountId = :accountFilter
@@ -63,10 +68,15 @@ interface TxnDao {
         ORDER BY t.happenedAt DESC, t.id DESC
         """
     )
-    fun observeRows(startKey: String, endKey: String, accountFilter: Long?): Flow<List<TxnRow>>
+    fun observeRows(
+        ledgerId: Long,
+        startKey: String,
+        endKey: String,
+        accountFilter: Long?,
+    ): Flow<List<TxnRow>>
 
     /**
-     * Range totals for the month header.
+     * Range totals for the period header.
      *
      * A transfer's fee is a real cost, so it counts as expense; the transferred
      * principal itself is neither income nor expense.
@@ -80,17 +90,17 @@ interface TxnDao {
                                 ELSE 0
                             END), 0) AS expenseCents
         FROM txn
-        WHERE deletedAt IS NULL AND isExcludedFromStats = 0
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isExcludedFromStats = 0
           AND localDateKey BETWEEN :startKey AND :endKey
         """
     )
-    fun observeTotals(startKey: String, endKey: String): Flow<PeriodTotals>
+    fun observeTotals(ledgerId: Long, startKey: String, endKey: String): Flow<PeriodTotals>
 
     /**
-     * Expense rolled up to main categories.
+     * Expense rolled up to top-level categories.
      *
-     * `COALESCE(c.parentId, c.id)` maps a child category onto its parent and
-     * leaves a root category as itself, so one query serves both levels.
+     * `COALESCE(c.parentId, c.id)` maps a leaf onto its 大类 and leaves a root
+     * category as itself, so one query serves both the 小类 and 大类 views.
      */
     @Query(
         """
@@ -98,21 +108,25 @@ interface TxnDao {
                SUM(t.amountCents) AS totalCents
         FROM txn t
         JOIN category c ON c.id = t.categoryId
-        WHERE t.deletedAt IS NULL
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL
           AND t.type = 'EXPENSE'
           AND t.isExcludedFromStats = 0
           AND t.localDateKey BETWEEN :startKey AND :endKey
         GROUP BY COALESCE(c.parentId, c.id)
         """
     )
-    fun observeMainCategoryTotals(startKey: String, endKey: String): Flow<List<MainCategoryTotal>>
+    fun observeMainCategoryTotals(
+        ledgerId: Long,
+        startKey: String,
+        endKey: String,
+    ): Flow<List<MainCategoryTotal>>
 
     @Query(
         """
         SELECT t.categoryId AS categoryId,
                SUM(t.amountCents) AS totalCents
         FROM txn t
-        WHERE t.deletedAt IS NULL
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL
           AND t.type = 'EXPENSE'
           AND t.isExcludedFromStats = 0
           AND t.categoryId IS NOT NULL
@@ -121,7 +135,11 @@ interface TxnDao {
         ORDER BY totalCents DESC
         """
     )
-    fun observeCategoryTotals(startKey: String, endKey: String): Flow<List<CategoryTotal>>
+    fun observeCategoryTotals(
+        ledgerId: Long,
+        startKey: String,
+        endKey: String,
+    ): Flow<List<CategoryTotal>>
 
     /** Per-day net for the calendar view; a month of rows, never the whole table. */
     @Query(
@@ -130,12 +148,12 @@ interface TxnDao {
                COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountCents ELSE 0 END), 0) AS incomeCents,
                COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountCents ELSE 0 END), 0) AS expenseCents
         FROM txn
-        WHERE deletedAt IS NULL AND isExcludedFromStats = 0
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isExcludedFromStats = 0
           AND localDateKey BETWEEN :startKey AND :endKey
         GROUP BY localDateKey
         """
     )
-    fun observeDayTotals(startKey: String, endKey: String): Flow<List<DayTotal>>
+    fun observeDayTotals(ledgerId: Long, startKey: String, endKey: String): Flow<List<DayTotal>>
 
     @Query(
         """
@@ -143,13 +161,17 @@ interface TxnDao {
                COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountCents ELSE 0 END), 0) AS incomeCents,
                COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountCents ELSE 0 END), 0) AS expenseCents
         FROM txn
-        WHERE deletedAt IS NULL AND isExcludedFromStats = 0
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isExcludedFromStats = 0
           AND localDateKey BETWEEN :startKey AND :endKey
         GROUP BY monthKey
         ORDER BY monthKey ASC
         """
     )
-    fun observeMonthTotals(startKey: String, endKey: String): Flow<List<MonthTotal>>
+    fun observeMonthTotals(
+        ledgerId: Long,
+        startKey: String,
+        endKey: String,
+    ): Flow<List<MonthTotal>>
 
     @Query("SELECT * FROM txn WHERE id = :id")
     suspend fun byId(id: Long): TxnEntity?
@@ -157,35 +179,61 @@ interface TxnDao {
     @Query(
         """
         SELECT DISTINCT merchant FROM txn
-        WHERE merchant IS NOT NULL AND merchant != '' AND deletedAt IS NULL
+        WHERE ledgerId = :ledgerId AND merchant IS NOT NULL AND merchant != ''
+          AND deletedAt IS NULL
         ORDER BY happenedAt DESC
         LIMIT :limit
         """
     )
-    suspend fun recentMerchants(limit: Int = 40): List<String>
+    suspend fun recentMerchants(ledgerId: Long, limit: Int): List<String>
 
-    /** "Recently used" ordering is what keeps a flat two-level category grid fast to tap. */
+    /** "Recently used" ordering is what keeps a flat category grid fast to tap. */
     @Query(
         """
         SELECT categoryId FROM txn
-        WHERE categoryId IS NOT NULL AND deletedAt IS NULL
+        WHERE ledgerId = :ledgerId AND categoryId IS NOT NULL AND deletedAt IS NULL
         GROUP BY categoryId
         ORDER BY MAX(happenedAt) DESC
         LIMIT :limit
         """
     )
-    suspend fun recentCategoryIds(limit: Int = 12): List<Long>
+    suspend fun recentCategoryIds(ledgerId: Long, limit: Int): List<Long>
 
     // ------------------------------------------------------------- dedupe / import
 
-    @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL AND externalNo = :externalNo")
-    suspend fun countByExternalNo(externalNo: String): Int
+    @Query(
+        """
+        SELECT COUNT(*) FROM txn
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND externalNo = :externalNo
+        """
+    )
+    suspend fun countByExternalNo(ledgerId: Long, externalNo: String): Int
 
-    @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL AND dedupeHash = :hash")
-    suspend fun countByDedupeHash(hash: String): Int
+    @Query(
+        """
+        SELECT COUNT(*) FROM txn
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND dedupeHash = :hash
+        """
+    )
+    suspend fun countByDedupeHash(ledgerId: Long, hash: String): Int
 
-    @Query("SELECT DISTINCT dedupeHash FROM txn WHERE deletedAt IS NULL AND dedupeHash IS NOT NULL")
-    suspend fun allDedupeHashes(): List<String>
+    @Query(
+        """
+        SELECT DISTINCT dedupeHash FROM txn
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND dedupeHash IS NOT NULL
+        """
+    )
+    suspend fun allDedupeHashes(ledgerId: Long): List<String>
+
+    /** Existing plan periods in this ledger, so the catch-up can skip them cheaply. */
+    @Query(
+        """
+        SELECT planId || ':' || planPeriodIndex FROM txn
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+          AND planId IS NOT NULL AND planPeriodIndex IS NOT NULL
+        """
+    )
+    suspend fun generatedPlanKeys(ledgerId: Long): List<String>
 
     // ----------------------------------------------------------------- writes
 
@@ -208,8 +256,8 @@ interface TxnDao {
     @Query("UPDATE txn SET deletedAt = :now, updatedAt = :now WHERE importBatchId = :batchId")
     suspend fun softDeleteBatch(batchId: Long, now: Long = System.currentTimeMillis())
 
-    @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL")
-    suspend fun count(): Int
+    @Query("SELECT COUNT(*) FROM txn WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
+    suspend fun count(ledgerId: Long): Int
 
     /** Unscoped on purpose: used once at startup to detect pre-ledger data. */
     @Query("SELECT COUNT(*) FROM txn WHERE deletedAt IS NULL")

@@ -121,13 +121,13 @@ object Presets {
      */
     suspend fun seedLedger(db: LedgerDatabase, ledger: LedgerEntity) {
         val categoryDao = db.categoryDao()
-        val existing = categoryDao.countForLedger(ledger.id)
+        val existing = categoryDao.count(ledger.id)
         if (existing == 0) {
             seedCategories(categoryDao, ledger.id)
         }
 
         val accountDao = db.accountDao()
-        if (accountDao.countForLedger(ledger.id) == 0) {
+        if (accountDao.count(ledger.id) == 0) {
             when (ledger.type) {
                 LedgerType.BUDGET -> accountDao.insertAll(
                     BUDGET_ACCOUNTS.mapIndexed { index, account ->

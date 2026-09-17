@@ -10,30 +10,50 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AccountDao {
 
-    @Query("SELECT * FROM account WHERE deletedAt IS NULL ORDER BY sortOrder ASC, id ASC")
-    fun observeAll(): Flow<List<AccountEntity>>
-
     @Query(
         """
         SELECT * FROM account
-        WHERE deletedAt IS NULL AND isArchived = 0
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+        ORDER BY isArchived ASC, sortOrder ASC, id ASC
+        """
+    )
+    fun observeAll(ledgerId: Long): Flow<List<AccountEntity>>
+
+    /**
+     * Accounts the user may pick from.
+     *
+     * `isHidden = 0` is what makes a 累计模式 ledger show no accounts: it still owns
+     * one so transactions have somewhere to point, but that account never surfaces.
+     */
+    @Query(
+        """
+        SELECT * FROM account
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+          AND isArchived = 0 AND isHidden = 0
         ORDER BY sortOrder ASC, id ASC
         """
     )
-    fun observeActive(): Flow<List<AccountEntity>>
+    fun observeActive(ledgerId: Long): Flow<List<AccountEntity>>
 
     @Query("SELECT * FROM account WHERE id = :id")
     suspend fun byId(id: Long): AccountEntity?
 
     /** One-shot read for form screens that need the list once, not a subscription. */
-    @Query("SELECT * FROM account WHERE deletedAt IS NULL ORDER BY isArchived ASC, sortOrder ASC, id ASC")
-    suspend fun all(): List<AccountEntity>
-
-    @Query("SELECT COUNT(*) FROM account WHERE deletedAt IS NULL")
-    suspend fun count(): Int
+    @Query(
+        """
+        SELECT * FROM account
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+        ORDER BY isArchived ASC, sortOrder ASC, id ASC
+        """
+    )
+    suspend fun all(ledgerId: Long): List<AccountEntity>
 
     @Query("SELECT COUNT(*) FROM account WHERE ledgerId = :ledgerId AND deletedAt IS NULL")
-    suspend fun countForLedger(ledgerId: Long): Int
+    suspend fun count(ledgerId: Long): Int
+
+    /** Unscoped on purpose: used once at startup to detect pre-ledger data. */
+    @Query("SELECT COUNT(*) FROM account WHERE deletedAt IS NULL")
+    suspend fun countAll(): Int
 
     /**
      * Derives every balance in one pass.
@@ -63,10 +83,10 @@ interface AccountDao {
                              AND t.accountId = a.id), 0)
                AS balanceCents
         FROM account a
-        WHERE a.deletedAt IS NULL
+        WHERE a.ledgerId = :ledgerId AND a.deletedAt IS NULL
         """
     )
-    fun observeBalances(): Flow<List<AccountBalance>>
+    fun observeBalances(ledgerId: Long): Flow<List<AccountBalance>>
 
     @Insert
     suspend fun insert(account: AccountEntity): Long

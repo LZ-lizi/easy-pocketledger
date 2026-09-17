@@ -9,6 +9,9 @@ import com.pocketledger.data.repo.LedgerRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -45,8 +48,31 @@ class AppContainer(context: Context) {
         )
     }
 
+    /**
+     * True once startup work finished. The shell waits for this so an upgraded
+     * install never flashes the onboarding screen before its ledger is adopted.
+     */
+    private val _startupComplete = MutableStateFlow(false)
+    val startupComplete: StateFlow<Boolean> = _startupComplete.asStateFlow()
+
     init {
-        appScope.launch { adoptPreLedgerDataIfNeeded() }
+        appScope.launch {
+            adoptPreLedgerDataIfNeeded()
+            selectInitialLedger()
+            _startupComplete.value = true
+        }
+    }
+
+    /**
+     * Picks the ledger the app opens on.
+     *
+     * With no ledger at all the selection stays null, which is the signal for
+     * onboarding to take over.
+     */
+    private suspend fun selectInitialLedger() {
+        val repo = repository
+        if (repo.selectedLedgerId.value != null) return
+        repo.activeLedgers().firstOrNull()?.let { repo.selectLedger(it.id) }
     }
 
     /**
@@ -85,7 +111,7 @@ class AppContainer(context: Context) {
     private suspend fun adoptPreLedgerDataIfNeeded() {
         val db = database
         if (db.ledgerDao().count() > 0) return
-        val hasLegacyData = db.txnDao().countAll() > 0 || db.accountDao().count() > 0
+        val hasLegacyData = db.txnDao().countAll() > 0 || db.accountDao().countAll() > 0
         if (!hasLegacyData) return
 
         val ledgerId = db.ledgerDao().insert(

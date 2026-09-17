@@ -11,11 +11,11 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TagDao {
 
-    @Query("SELECT * FROM tag ORDER BY name ASC")
-    fun observeAll(): Flow<List<TagEntity>>
+    @Query("SELECT * FROM tag WHERE ledgerId = :ledgerId ORDER BY name ASC")
+    fun observeAll(ledgerId: Long): Flow<List<TagEntity>>
 
-    @Query("SELECT * FROM tag ORDER BY name ASC")
-    suspend fun all(): List<TagEntity>
+    @Query("SELECT * FROM tag WHERE ledgerId = :ledgerId ORDER BY name ASC")
+    suspend fun all(ledgerId: Long): List<TagEntity>
 
     @Query("SELECT * FROM tag WHERE name = :name LIMIT 1")
     suspend fun byName(name: String): TagEntity?

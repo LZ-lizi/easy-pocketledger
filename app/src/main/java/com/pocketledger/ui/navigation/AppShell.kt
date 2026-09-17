@@ -1,5 +1,7 @@
 package com.pocketledger.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
@@ -14,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -29,6 +32,8 @@ import com.pocketledger.feature.entry.EntryScreen
 import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
 import com.pocketledger.feature.home.HomeViewModel
+import com.pocketledger.feature.onboarding.OnboardingScreen
+import com.pocketledger.feature.onboarding.OnboardingViewModel
 import com.pocketledger.feature.settings.SettingsScreen
 import com.pocketledger.feature.settings.TermSettingsScreen
 import com.pocketledger.feature.settings.TermSettingsViewModel
@@ -36,6 +41,7 @@ import com.pocketledger.feature.stats.StatsScreen
 import com.pocketledger.feature.stats.StatsViewModel
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
+import com.pocketledger.di.rememberAppContainer
 
 /** Route names. Moving to type-safe routes is a later, purely mechanical change. */
 object Routes {
@@ -63,14 +69,49 @@ private val TABS = listOf(
 private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"
 
 /**
- * The application shell: four tabs plus two full-window routes.
+ * The application shell.
+ *
+ * Three states, in order: waiting for startup work, onboarding when no ledger
+ * exists yet, and the tabs. Startup must be awaited first so an upgraded install
+ * never flashes onboarding before its existing data is adopted into a ledger.
+ */
+@Composable
+fun AppShell() {
+    val container = rememberAppContainer()
+    val startupComplete by container.startupComplete.collectAsStateWithLifecycle()
+    val ledgerId by container.repository.selectedLedgerId.collectAsStateWithLifecycle()
+
+    when {
+        !startupComplete -> StartupPlaceholder()
+
+        ledgerId == null -> {
+            val viewModel: OnboardingViewModel = viewModel(factory = OnboardingViewModel.Factory)
+            OnboardingScreen(viewModel = viewModel)
+        }
+
+        else -> LedgerNavHost()
+    }
+}
+
+/** An empty, correctly coloured frame while startup finishes. */
+@Composable
+private fun StartupPlaceholder() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    )
+}
+
+/**
+ * The four tabs plus the full-window routes.
  *
  * The bottom bar and the FAB are hoisted above the `NavHost` so the entry and edit
  * screens can take the whole window -- a keypad that shares space with a
  * navigation bar is a keypad that gets mis-tapped.
  */
 @Composable
-fun AppShell() {
+private fun LedgerNavHost() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
