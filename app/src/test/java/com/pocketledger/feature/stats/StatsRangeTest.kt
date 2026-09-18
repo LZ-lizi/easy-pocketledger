@@ -19,7 +19,9 @@ class StatsRangeTest {
         monthKey: String = "2026-09",
         termId: Long? = null,
         terms: List<TermEntity> = emptyList(),
-    ) = StatsSelection(mode, monthKey, termId, terms)
+        pieLevel: PieLevel = PieLevel.SMALL,
+        filterMainCategoryId: Long? = null,
+    ) = StatsSelection(mode, monthKey, termId, terms, pieLevel, filterMainCategoryId)
 
     private fun term(id: Long, name: String, start: String, end: String) = TermEntity(
         id = id,

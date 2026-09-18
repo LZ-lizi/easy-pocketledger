@@ -143,6 +143,11 @@ fun AccountEditorDialog(
                     isError = !initialValid,
                 )
 
+                QuickAmountRow { delta ->
+                    val current = Money.parseYuanToCents(initialBalance) ?: 0L
+                    initialBalance = Money.formatCompact(current + delta)
+                }
+
                 if (isCreditCard) {
                     OutlinedTextField(
                         value = creditLimit,
@@ -256,6 +261,41 @@ fun AccountEditorDialog(
         },
     )
 }
+
+/**
+ * Quick nudges to the opening balance.
+ *
+ * These edit the account's starting figure and nothing else. They deliberately do
+ * not write an income row: filling in a card you already have money on must not
+ * inflate this month's income, which is exactly what would happen if this were
+ * wired to the ledger instead of to the field.
+ */
+@Composable
+private fun QuickAmountRow(onAdd: (Long) -> Unit) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        QUICK_AMOUNTS_YUAN.forEach { yuan ->
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable { onAdd(yuan * 100L) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+$yuan",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
+}
+
+private val QUICK_AMOUNTS_YUAN = listOf(100L, 500L, 1000L, 5000L)
 
 @Composable
 private fun SelectChip(label: String, selected: Boolean, onClick: () -> Unit) {
