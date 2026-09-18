@@ -26,6 +26,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pocketledger.feature.accounts.AccountsScreen
 import com.pocketledger.feature.accounts.AccountsViewModel
+import com.pocketledger.feature.categories.CategorySettingsScreen
+import com.pocketledger.feature.categories.CategorySettingsViewModel
 import com.pocketledger.feature.edit.EditScreen
 import com.pocketledger.feature.edit.EditViewModel
 import com.pocketledger.feature.entry.EntryScreen
@@ -34,6 +36,9 @@ import com.pocketledger.feature.home.HomeScreen
 import com.pocketledger.feature.home.HomeViewModel
 import com.pocketledger.feature.onboarding.OnboardingScreen
 import com.pocketledger.feature.onboarding.OnboardingViewModel
+import com.pocketledger.feature.settings.AboutScreen
+import com.pocketledger.feature.settings.LedgerSettingsScreen
+import com.pocketledger.feature.settings.LedgerSettingsViewModel
 import com.pocketledger.feature.settings.SettingsScreen
 import com.pocketledger.feature.settings.TermSettingsScreen
 import com.pocketledger.feature.settings.TermSettingsViewModel
@@ -53,6 +58,9 @@ object Routes {
     const val EDIT = "edit"
     const val EDIT_ARG = "txnId"
     const val TERMS = "terms"
+    const val LEDGERS = "ledgers"
+    const val CATEGORIES = "categories"
+    const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
 }
@@ -175,7 +183,37 @@ private fun LedgerNavHost() {
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     contentPadding = padding,
+                    onOpenLedgers = { navController.navigate(Routes.LEDGERS) },
+                    onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
+                    onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                )
+            }
+
+            composable(Routes.LEDGERS) {
+                val viewModel: LedgerSettingsViewModel =
+                    viewModel(factory = LedgerSettingsViewModel.Factory)
+                LedgerSettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.CATEGORIES) {
+                val viewModel: CategorySettingsViewModel =
+                    viewModel(factory = CategorySettingsViewModel.Factory)
+                CategorySettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.ABOUT) {
+                AboutScreen(
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
                 )
             }
 

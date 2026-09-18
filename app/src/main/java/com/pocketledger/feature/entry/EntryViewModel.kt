@@ -33,7 +33,6 @@ data class EntryUiState(
     val feeInput: String = "",
     val allCategories: List<CategoryEntity> = emptyList(),
     val accounts: List<AccountEntity> = emptyList(),
-    val selectedMainCategoryId: Long? = null,
     val selectedCategoryId: Long? = null,
     val selectedAccountId: Long? = null,
     /** Destination account; TRANSFER only. */
@@ -41,38 +40,37 @@ data class EntryUiState(
     val note: String = "",
     val merchant: String = "",
     val dateKey: String = DateKeys.dateKey(LocalDate.now()),
+    /**
+     * Null means "use the current time", which is what a new entry almost always
+     * wants. A time is only displayed and stored once the user changes it, so the
+     * field stays out of the way of the common case.
+     */
+    val customTime: LocalTime? = null,
     val recentCategoryIds: List<Long> = emptyList(),
     /** Drives the brief "已记一笔" confirmation; cleared on the next input. */
     val justSaved: Boolean = false,
 ) {
     val isTransfer: Boolean get() = type == TxnType.TRANSFER
 
+    val hasCustomTime: Boolean get() = customTime != null
+
     val kind: CategoryKind
         get() = if (type == TxnType.INCOME) CategoryKind.INCOME else CategoryKind.EXPENSE
 
-    /** Tabs. Expense has 日常 / 娱乐; income is flat, and a transfer has no category. */
-    val mainCategories: List<CategoryEntity>
-        get() = if (isTransfer) {
-            emptyList()
-        } else {
-            allCategories.filter { it.kind == kind && it.parentId == null }
-                .sortedBy { it.sortOrder }
-        }
-
     /**
-     * Income categories are all roots, so they are shown directly. Expense items
-     * are the children of the selected main category.
+     * The items the keypad offers.
+     *
+     * Expense shows **every leaf in one grid** rather than a 大类 tab plus that
+     * group's leaves: the two-step picker spent a tap on a choice the person does
+     * not actually care about, and the 大类 still exists for statistics, which is
+     * where grouping earns its keep.
      */
     val visibleCategories: List<CategoryEntity>
         get() = when {
             isTransfer -> emptyList()
-            kind == CategoryKind.INCOME -> mainCategories
-            else -> {
-                val parent = selectedMainCategoryId ?: mainCategories.firstOrNull()?.id
-                allCategories.filter { it.kind == kind && it.parentId == parent }
-                    .sortedBy { it.sortOrder }
-            }
-        }
+            kind == CategoryKind.INCOME -> allCategories.filter { it.kind == kind }
+            else -> allCategories.filter { it.kind == kind && it.parentId != null }
+        }.sortedBy { it.sortOrder }
 
     /** Recently used items float to the front; a flat grid is slow to scan otherwise. */
     val orderedCategories: List<CategoryEntity>
@@ -118,14 +116,7 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
     init {
         viewModelScope.launch {
             repository.observeAllCategories().collect { categories ->
-                _uiState.update { state ->
-                    val kind = state.kind
-                    val mains = categories.filter { it.kind == kind && it.parentId == null }
-                    val mainId = state.selectedMainCategoryId
-                        ?.takeIf { id -> mains.any { it.id == id } }
-                        ?: mains.firstOrNull()?.id
-                    state.copy(allCategories = categories, selectedMainCategoryId = mainId)
-                }
+                _uiState.update { it.copy(allCategories = categories) }
             }
         }
         viewModelScope.launch {
@@ -162,11 +153,9 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
     fun setType(type: TxnType) {
         _uiState.update { state ->
             if (state.type == type) return@update state
-            val mains = state.allCategories.filter { it.kind == kindOf(type) && it.parentId == null }
             state.copy(
                 type = type,
                 selectedCategoryId = null,
-                selectedMainCategoryId = mains.firstOrNull()?.id,
                 feeInput = if (type == TxnType.TRANSFER) state.feeInput else "",
                 justSaved = false,
             )
@@ -192,12 +181,6 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     fun clearAmount() {
         _uiState.update { it.copy(amountInput = "", justSaved = false) }
-    }
-
-    fun selectMainCategory(id: Long) {
-        _uiState.update {
-            it.copy(selectedMainCategoryId = id, selectedCategoryId = null, justSaved = false)
-        }
     }
 
     fun selectCategory(id: Long) {
@@ -232,6 +215,29 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
         _uiState.update { it.copy(dateKey = dateKey, justSaved = false) }
     }
 
+    fun shiftDate(days: Long) {
+        _uiState.update { state ->
+            val next = runCatching { LocalDate.parse(state.dateKey).plusDays(days) }
+                .getOrElse { LocalDate.now() }
+            state.copy(dateKey = next.toString(), justSaved = false)
+        }
+    }
+
+    /** Setting a time also marks the entry as deliberately timed. */
+    fun setTime(hour: Int, minute: Int) {
+        _uiState.update {
+            it.copy(
+                customTime = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)),
+                justSaved = false,
+            )
+        }
+    }
+
+    /** Drops back to "use the current time" and hides the time again. */
+    fun useCurrentTime() {
+        _uiState.update { it.copy(customTime = null, justSaved = false) }
+    }
+
     // -------------------------------------------------------------------- saving
 
     fun save() {
@@ -252,7 +258,7 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
                     categoryId = if (state.isTransfer) null else state.selectedCategoryId,
                     merchant = if (state.isTransfer) null else state.merchant.trim().ifBlank { null },
                     note = state.note.trim().ifBlank { null },
-                    happenedAt = epochMillisFor(state.dateKey),
+                    happenedAt = epochMillisFor(state.dateKey, state.customTime),
                     localDateKey = state.dateKey,
                     source = TxnSource.MANUAL,
                 )
@@ -275,10 +281,10 @@ class EntryViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     companion object {
 
-        /** Today's clock time on the chosen date, so same-day entries keep their order. */
-        fun epochMillisFor(dateKey: String): Long {
+        /** The chosen day at the chosen time, or at the current time when none was set. */
+        fun epochMillisFor(dateKey: String, time: LocalTime?): Long {
             val date = runCatching { LocalDate.parse(dateKey) }.getOrElse { LocalDate.now() }
-            return date.atTime(LocalTime.now())
+            return date.atTime(time ?: LocalTime.now())
                 .atZone(ZoneId.systemDefault())
                 .toInstant()
                 .toEpochMilli()

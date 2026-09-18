@@ -4,12 +4,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -18,39 +19,56 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
 
 private class SettingsEntry(
     val title: String,
     val detail: String,
-    val onClick: (() -> Unit)? = null,
+    val onClick: () -> Unit,
+)
+
+private class SettingsSection(
+    val title: String,
+    val entries: List<SettingsEntry>,
 )
 
 /**
- * The settings hub.
+ * The settings hub, as a two-level menu: sections, entries, then a page.
  *
- * Entries that are not implemented yet are still listed, greyed by their wording
- * rather than hidden: the remaining work is then visible in the app itself instead
- * of only in the plan document.
+ * Every entry navigates to a real screen. The earlier version listed sections that
+ * were not built yet with no click handler at all, which read as broken rather than
+ * unfinished -- an entry that cannot be opened should not be listed.
  */
 @Composable
 fun SettingsScreen(
     contentPadding: PaddingValues,
+    onOpenLedgers: () -> Unit,
+    onOpenCategories: () -> Unit,
     onOpenTerms: () -> Unit,
+    onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val entries = listOf(
-        SettingsEntry(
-            title = "学期设置",
-            detail = "统计页「学期」用的日期区间，比如 2026 秋季学期",
-            onClick = onOpenTerms,
+    val sections = listOf(
+        SettingsSection(
+            title = "账本",
+            entries = listOf(
+                SettingsEntry("账本管理", "切换、新建、重命名、归档", onOpenLedgers),
+            ),
         ),
-        SettingsEntry("分类与标签", "改名、改归属、增删二级项"),
-        SettingsEntry("账单导入", "支付宝 / 微信 CSV，自动去重，可整批撤销"),
-        SettingsEntry("导出与备份", "导出 CSV、完整备份与恢复、每日自动备份"),
-        SettingsEntry("预算与提醒", "总预算 / 主分类预算 / 分类预算，超支通知"),
-        SettingsEntry("安全", "PIN 码 + 生物识别解锁、自动锁定"),
-        SettingsEntry("桌面小组件", "把「本月还能花」放到桌面"),
-        SettingsEntry("外观", "动态取色、深色模式"),
+        SettingsSection(
+            title = "记账",
+            entries = listOf(
+                SettingsEntry("类别管理", "增删改类别，调整大类归属", onOpenCategories),
+                SettingsEntry("学期设置", "统计页「学期」用的日期区间", onOpenTerms),
+            ),
+        ),
+        SettingsSection(
+            title = "关于",
+            entries = listOf(
+                SettingsEntry("关于记账本", "版本、当前账本、数据存放位置", onOpenAbout),
+            ),
+        ),
     )
 
     LazyColumn(
@@ -63,56 +81,61 @@ fun SettingsScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(key = "header") {
+        item(key = "title") {
             Text(
-                text = "我的",
+                text = "设置",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
-        items(entries, key = { it.title }) { entry ->
-            SettingsCard(entry)
+        sections.forEach { section ->
+            item(key = "section-${section.title}") {
+                Text(
+                    text = section.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                )
+            }
+            items(section.entries.size, key = { "entry-${section.title}-$it" }) { index ->
+                SettingsCard(section.entries[index])
+            }
         }
     }
 }
 
 @Composable
 private fun SettingsCard(entry: SettingsEntry) {
-    val enabled = entry.onClick != null
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (enabled) Modifier.clickable { entry.onClick?.invoke() } else Modifier
-            ),
+            .clickable(onClick = entry.onClick),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = if (enabled) {
-                MaterialTheme.colorScheme.surface
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.Start,
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = entry.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                text = entry.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = entry.detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            LedgerIconView(
+                icon = LedgerIcon.CHEVRON_RIGHT,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 18.dp,
             )
         }
     }
