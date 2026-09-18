@@ -343,6 +343,25 @@ object CsvImport {
     }
 
     /**
+     * Whether this row is already in the ledger.
+     *
+     * The bill's own transaction number is the row's identity, so it wins when the file
+     * carries one. [dedupeHash] is the fallback for files that do not, and the two are
+     * not redundant: the fingerprint is derived from a note and a timestamp that the
+     * importer's own rules produce, so changing those rules -- dropping WeChat's `/`
+     * placeholder, stopping the rounding of Excel times -- makes every row imported by
+     * an earlier version unrecognisable and re-adds it as a duplicate. A real ledger hit
+     * exactly that: of 100 rows in one file, an earlier import owned 79 and the new
+     * fingerprint matched 2.
+     */
+    fun isAlreadyImported(
+        row: ImportRow,
+        dedupeHashes: Set<String>,
+        externalNos: Set<String>,
+    ): Boolean = row.dedupeHash in dedupeHashes ||
+        (row.externalNo != null && row.externalNo in externalNos)
+
+    /**
      * Stable fingerprint of a row.
      *
      * Includes the time when the file provides one, because two identical 12.00
@@ -442,13 +461,28 @@ object CsvImport {
      * keeps a row's meaning intact -- the same bill exported as CSV or as .xlsx must
      * produce the same note, or the two files would import as two different
      * transactions and the deduplication would not catch it.
+     *
+     * Empty cells are not exported as empty: WeChat writes a bare `/` into 商品 and 备注
+     * when there is nothing to say, and that slash then ended up inside the note on real
+     * bills -- the detail list showed 「购买钱包 /」 and 「/」. [BLANK_TOKENS] are dropped
+     * before the join so a placeholder never reaches the stored note. It has to happen
+     * here rather than at display time, because the note is part of [dedupeHash] and the
+     * two import formats must agree on it.
      */
     private fun mergeNote(description: String, remark: String): String? = listOf(description, remark)
         .map { it.trim() }
-        .filter { it.isNotEmpty() }
+        .filter { it.isNotEmpty() && it !in BLANK_TOKENS }
         .distinct()
         .joinToString(" ")
         .ifBlank { null }
+
+    /**
+     * What these bills write instead of an empty cell.
+     *
+     * `--` and `—` are the same placeholder in other locales; 无/暂无/N/A are what
+     * hand-kept spreadsheets use.
+     */
+    private val BLANK_TOKENS = setOf("/", "-", "--", "—", "\\", ".", "无", "暂无", "N/A", "n/a")
 
     /** `¥1,240.50`, `1240.50元` and `-50.00` all have to become a plain decimal. */
     private fun cleanAmount(value: String): String = value
@@ -527,12 +561,24 @@ object CsvImport {
         return runCatching { epoch.plusDays(days) }.getOrNull()
     }
 
-    /** The fractional part of a serial date is its time of day. */
+    /**
+     * The fractional part of a serial date is its time of day, to the minute.
+     *
+     * WeChat writes the same moment as the text `2026-09-18 19:04:37` in CSV and as
+     * `46283.79487268518` in xlsx. [parseTime] reads the text as 19:04, so this has to
+     * land on 19:04 as well: `Math.round(fraction * 1440)` gave 19:05, and since
+     * [dedupeHash] carries only hours and minutes the two exports of one bill hashed
+     * differently -- importing the CSV and then the xlsx re-added every row.
+     *
+     * Rounding to the nearest second first is what makes the truncation safe. Flooring
+     * `fraction * 1440` directly would turn a serial for exactly 19:05:00 into 19:04
+     * whenever floating point lands a hair below the integer.
+     */
     private fun excelTime(serial: Double): LocalTime? {
         val days = serial.toLong()
         val fraction = serial - days
         if (fraction <= 0.0) return null
-        val minutes = Math.round(fraction * 24 * 60).toInt().mod(24 * 60)
-        return LocalTime.of(minutes / 60, minutes % 60)
+        val seconds = Math.round(fraction * 24 * 60 * 60).toInt().mod(24 * 60 * 60)
+        return LocalTime.of(seconds / 3600, (seconds % 3600) / 60)
     }
 }

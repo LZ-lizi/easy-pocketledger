@@ -42,6 +42,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.data.entity.LedgerEntity
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.theme.LedgerTheme
@@ -118,6 +120,13 @@ fun ImportScreen(
         when (state.stage) {
             ImportStage.PICK -> {
                 item(key = "intro") { IntroCard() }
+                item(key = "ledger") {
+                    LedgerPicker(
+                        ledgers = state.ledgers,
+                        selectedId = state.targetLedgerId,
+                        onSelect = viewModel::selectTargetLedger,
+                    )
+                }
                 item(key = "pick") {
                     ActionButton(
                         label = if (state.busy) "读取中…" else "选择账单文件",
@@ -151,10 +160,22 @@ fun ImportScreen(
             ImportStage.REVIEW -> {
                 item(key = "file") { ReviewSummary(state) }
 
+                // Above the account picker, and still changeable here: which ledger the
+                // file lands in is the biggest decision on this screen, and the
+                // duplicate flags and category matches below are all derived from it.
+                item(key = "ledger") {
+                    LedgerPicker(
+                        ledgers = state.ledgers,
+                        selectedId = state.targetLedgerId,
+                        onSelect = viewModel::selectTargetLedger,
+                    )
+                }
+
                 item(key = "account") {
                     AccountPicker(
                         accounts = state.accounts,
                         selectedId = state.accountId,
+                        implicit = state.accountIsImplicit,
                         onSelect = viewModel::setAccount,
                     )
                 }
@@ -310,10 +331,86 @@ private fun ReviewSummary(state: ImportUiState) {
     }
 }
 
+/**
+ * Which ledger the bill is filed into.
+ *
+ * Defaults to the ledger the app is on, but does not follow it: a bill belongs where the
+ * user says it belongs, and the alternative -- switch ledgers in the tab bar, come back
+ * into settings, import, switch back -- is four steps to express one fact.
+ */
+@Composable
+private fun LedgerPicker(
+    ledgers: List<LedgerEntity>,
+    selectedId: Long?,
+    onSelect: (Long) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val current = ledgers.firstOrNull { it.id == selectedId }
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "导入到账本",
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        Box {
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(scheme.surfaceContainer)
+                    .clickable(enabled = ledgers.size > 1) { expanded = true }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = current?.name ?: "没有可用的账本",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurface,
+                )
+                if (current?.type == LedgerType.ACCUMULATE) {
+                    Text(
+                        text = " · 累计",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                if (ledgers.size > 1) {
+                    Text(
+                        text = " ▾",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ledgers.forEach { ledger ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (ledger.type == LedgerType.ACCUMULATE) {
+                                    "${ledger.name} · 累计"
+                                } else {
+                                    ledger.name
+                                }
+                            )
+                        },
+                        onClick = {
+                            onSelect(ledger.id)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AccountPicker(
     accounts: List<AccountEntity>,
     selectedId: Long?,
+    implicit: Boolean,
     onSelect: (Long) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -322,6 +419,17 @@ private fun AccountPicker(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (implicit) {
+            // A 累计模式 ledger owns one account that no screen shows. Asking the user
+            // to go and create a pickable one was asking them to fight the mode they
+            // chose, so the rows simply go where the entry keypad already puts them.
+            Text(
+                text = "累计模式的账本不记账户，记录会记入它自己的内部账户。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
         if (accounts.isEmpty()) {
             Text(
                 text = "当前账本没有可用账户，先在账户页建一个。",

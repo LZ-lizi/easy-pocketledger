@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -57,6 +58,7 @@ import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
 import java.time.LocalTime
+import kotlin.math.floor
 
 private val KEYPAD_ROWS = listOf(
     listOf("1", "2", "3"),
@@ -323,6 +325,21 @@ private fun AmountDisplay(amountInput: String, mode: EntryMode) {
  * choice in the same list, not a different kind of thing. It carries the three-dot
  * glyph and the same shape as every category around it.
  */
+/**
+ * Nominal height of one category cell: 4dp padding + 38dp icon + 3dp gap + ~16dp label
+ * + 4dp padding.
+ *
+ * The grid is sized in whole multiples of this rather than being given the full
+ * remaining height. `weight(1f)` handed it 223dp on a 1080x2400 phone while a row cost
+ * 78dp, so the third row was always sliced in half -- measured on a real device, the
+ * 「公共交通」 label came out 11px tall and collided with the account chips below. A
+ * half-row is not a scroll hint, it is a rendering defect, so the grid now occupies
+ * exactly the rows that fit and the remainder of the slot stays empty.
+ */
+private val CategoryCellHeight = 65.dp
+private val CategoryRowSpacing = 2.dp
+private val CategoryGridPadding = 6.dp
+
 @Composable
 private fun CategoryGrid(
     state: EntryUiState,
@@ -332,29 +349,43 @@ private fun CategoryGrid(
     var moreOpen by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            items(state.visibleCategories, key = { it.id }) { category ->
-                CategoryCell(
-                    category = category,
-                    selected = category.id == state.selectedCategoryId,
-                    onClick = { onSelect(category.id) },
-                )
-            }
-            if (state.hasHiddenCategories) {
-                item(key = "more") {
-                    MoreCell(
-                        label = "更多",
-                        selected = false,
-                        onClick = { moreOpen = true },
+            val pitch = CategoryCellHeight + CategoryRowSpacing
+            val usable = (maxHeight - CategoryGridPadding * 2).coerceAtLeast(CategoryCellHeight)
+            // Whole rows only, and never more than the list actually needs -- an
+            // income ledger has six leaves and should not reserve three empty rows.
+            val fits = floor(usable.value / pitch.value).toInt().coerceAtLeast(1)
+            val needed = (state.visibleCategories.size + (if (state.hasHiddenCategories) 1 else 0) + 3) / 4
+            val rows = minOf(fits, maxOf(needed, 1))
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(CategoryCellHeight * rows + CategoryRowSpacing * (rows - 1) + CategoryGridPadding * 2),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = CategoryGridPadding),
+                verticalArrangement = Arrangement.spacedBy(CategoryRowSpacing),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                items(state.visibleCategories, key = { it.id }) { category ->
+                    CategoryCell(
+                        category = category,
+                        selected = category.id == state.selectedCategoryId,
+                        onClick = { onSelect(category.id) },
                     )
+                }
+                if (state.hasHiddenCategories) {
+                    item(key = "more") {
+                        MoreCell(
+                            label = "更多",
+                            selected = false,
+                            onClick = { moreOpen = true },
+                        )
+                    }
                 }
             }
         }
@@ -826,12 +857,12 @@ private fun MoreCell(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
@@ -839,10 +870,10 @@ private fun MoreCell(label: String, selected: Boolean, onClick: () -> Unit) {
             LedgerIconView(
                 icon = LedgerIcon.ELLIPSIS,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                size = 22.dp,
+                size = 20.dp,
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -865,12 +896,12 @@ private fun CategoryCell(
         modifier = Modifier
             .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(if (selected) accent else accent.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center,
@@ -878,10 +909,10 @@ private fun CategoryCell(
             LedgerIconView(
                 icon = LedgerIcon.forKey(category.iconKey),
                 tint = if (selected) Color.White else accent,
-                size = 22.dp,
+                size = 20.dp,
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             text = category.name,
             style = MaterialTheme.typography.labelSmall,

@@ -372,6 +372,12 @@ private fun AllowanceCard(
                 color = scheme.onSurfaceVariant,
             )
 
+            // The progress bar and the 已花/额度 row only say something when there is an
+            // allowance to measure against. Without one they repeated the hero number a
+            // third time -- the card read 本月已花 / ¥1,007.16 / 已花 ¥1,007.16 /
+            // 已花 1,007.16 -- and drew an empty bar that carried no information.
+            if (!allowance.hasBudget) return@Column
+
             Spacer(Modifier.height(16.dp))
             // A plain fill against the allowance: the old two-colour split compared
             // 日常 against 娱乐, a distinction the category tree no longer carries.
@@ -406,20 +412,18 @@ private fun AllowanceCard(
                     style = MoneyTextStyles.Small,
                     color = scheme.onSurfaceVariant,
                 )
-                if (allowance.hasBudget) {
-                    Text(
-                        text = " / 额度 ${Money.format(allowance.budgetCents)}",
-                        style = MoneyTextStyles.Small,
-                        color = scheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = " / 额度 ${Money.format(allowance.budgetCents)}",
+                    style = MoneyTextStyles.Small,
+                    color = scheme.onSurfaceVariant,
+                )
             }
         }
     }
 }
 
 private fun secondaryLine(allowance: AllowanceSnapshot): String = when {
-    !allowance.hasBudget -> "已花 ${Money.formatWithSymbol(allowance.spentCents)}"
+    !allowance.hasBudget -> "点这里设置每月生活费，就能看到「本月还能花」和日均可用"
     allowance.isOverBudget -> "已超出 ${Money.formatWithSymbol(-allowance.remainingCents)}"
     allowance.daysRemaining <= 0 -> "本月已结束"
     else -> "日均 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"

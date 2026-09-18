@@ -251,6 +251,22 @@ interface TxnDao {
     )
     suspend fun allDedupeHashes(ledgerId: Long): List<String>
 
+    /**
+     * The bill transaction numbers already stored in this ledger.
+     *
+     * Read as a set alongside [allDedupeHashes]. A bill's own 交易单号 identifies the
+     * transaction, so it survives changes to how a note or a timestamp is derived from
+     * the file -- changes that would otherwise make rows imported by an earlier version
+     * unrecognisable and re-import them as duplicates.
+     */
+    @Query(
+        """
+        SELECT DISTINCT externalNo FROM txn
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND externalNo IS NOT NULL
+        """
+    )
+    suspend fun allExternalNos(ledgerId: Long): List<String>
+
     /** Existing plan periods in this ledger, so the catch-up can skip them cheaply. */
     @Query(
         """

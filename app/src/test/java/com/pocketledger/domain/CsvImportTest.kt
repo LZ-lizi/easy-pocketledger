@@ -402,6 +402,198 @@ class CsvImportTest {
         assertEquals(TxnType.INCOME, row.type)
     }
 
+    // ------------------------------------------------- empty cells are not "/"
+
+    @Test
+    fun `a slash placeholder never reaches the note`() {
+        // WeChat writes a bare "/" where a cell is empty. On a real export this showed up
+        // in the detail list as 「购买钱包 /」 and 「/」.
+        val bill = """
+            微信支付账单明细
+            交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号,商户单号,备注
+            2026-09-18 19:04:36,商户消费,内蒙古鼎派科技有限公司,购买钱包,支出,3.50,零钱通,支付成功,4200001,,/
+            2026-09-17 18:05:00,商户消费,雅杰超市,/,支出,13.50,零钱通,支付成功,4200002,,/
+            2026-09-16 17:01:00,商户消费,抖音生活服务商家,双人套餐,支出,21.50,储蓄卡,支付成功,4200003,,已优惠¥11.00
+        """.trimIndent()
+
+        val preview = CsvImport.parse(bill)
+        assertEquals("购买钱包", preview.rows[0].note)
+        assertNull(preview.rows[1].note)
+        // A remark that says something is still kept, and still joined to 商品.
+        assertEquals("双人套餐 已优惠¥11.00", preview.rows[2].note)
+    }
+
+    @Test
+    fun `a slash placeholder does not change the fingerprint between csv and xlsx`() {
+        // The note feeds dedupeHash, so both exporters must drop the placeholder
+        // identically or the same bill would import twice.
+        val csv = "交易时间,交易对方,商品,收/支,金额(元),备注,当前状态\n" +
+            "2026-09-18 19:04:36,超市,购物袋,支出,0.50,/,支付成功\n"
+        val sheet = listOf(
+            listOf("交易时间", "交易对方", "商品", "收/支", "金额(元)", "备注", "当前状态"),
+            listOf("2026-09-18 19:04:36", "超市", "购物袋", "支出", 0.5, "/", "支付成功"),
+        )
+        val fromCsv = CsvImport.parse(csv).rows.single()
+        val fromXlsx = CsvImport.parseFile("账单.xlsx", buildXlsx(sheet)).rows.single()
+        assertEquals("购物袋", fromCsv.note)
+        assertEquals(fromCsv.dedupeHash, fromXlsx.dedupeHash)
+    }
+
+    // ---------------------------------------- the layout a real WeChat export has
+
+    /**
+     * Seventeen lines of preamble, the header on row 18, dates as Excel serials.
+     *
+     * Modelled on an actual 微信支付账单流水文件(.xlsx): the numbers here are made up, but
+     * the shape -- preamble length, column set, serial timestamps, `/` placeholders,
+     * 中性交易 rows marked `/` in 收/支, refunds in 当前状态 -- is taken from a real file,
+     * because the generic fixtures at the top of this class do not exercise it.
+     */
+    private fun realWechatSheet(): List<List<Any?>> = listOf(
+        listOf("微信支付账单明细"),
+        listOf("微信昵称：[张三]"),
+        listOf("起始时间：[2026-08-18 00:00:00] 终止时间：[2026-09-18 21:30:02]"),
+        listOf("导出类型：[全部账单]"),
+        listOf("导出时间：[2026-09-18 21:30:02]"),
+        listOf(),
+        listOf("共7笔记录"),
+        listOf("收入：2笔 2000.08元"),
+        listOf("支出：4笔 63.50元"),
+        listOf("中性交易：1笔 20.00元"),
+        listOf("注："),
+        listOf("1. 充值/提现等交易不在此列"),
+        listOf("2. 若交易记录明细无有效内容，则代表该时间段内无交易"),
+        listOf("3. 本明细仅供个人对账使用"),
+        listOf("4. 本账单中所有时间均为UTC+08:00时间"),
+        listOf(),
+        listOf("----------------------微信支付账单明细列表--------------------"),
+        listOf(
+            "交易时间", "交易类型", "交易对方", "商品", "收/支", "金额(元)",
+            "支付方式", "当前状态", "交易单号", "商户单号", "备注",
+        ),
+        // 46283 = 2026-09-18, .7948 = 19:04
+        listOf(46283.79487268518, "商户消费", "某科技公司", "购买钱包", "支出", 3.5, "零钱通", "支付成功", "4500", "2609", "/"),
+        listOf(46282.75335648148, "商户消费", "某超市", "/", "支出", 13.5, "零钱通", "支付成功", "4501", "1016", "/"),
+        listOf(46281.76325231481, "商户消费", "某出行公司", "共享单车月卡", "支出", 1.5, "零钱通", "支付成功", "4502", "0321", "/"),
+        listOf(46270.71644675926, "转账", "三姑 (范美清)", "转账备注:微信转账", "收入", 2000, "/", "已转入零钱通", "1000", "/", "/"),
+        listOf(46282.457650462966, "微信红包", "缘", "/", "收入", 0.08, "/", "已存入零钱", "1001", "1000", "/"),
+        listOf(46285.71, "商户消费", "拼多多", "一次性商品", "支出", 45.0, "零钱通", "已退款(¥2.00)", "4503", "XP1", "/"),
+        listOf(46280.37582175926, "零钱提现", "某银行(8869)", "/", "/", 20.0, "储蓄卡", "提现已到账", "2072", "/", "服务费¥0.00"),
+    )
+
+    @Test
+    fun `reads a real-shaped WeChat xlsx export`() {
+        val preview = CsvImport.parseFile("微信支付账单流水文件.xlsx", buildXlsx(realWechatSheet()))
+
+        // Five of the seven survive: the 中性交易 row is dropped for its "/", and the
+        // partially refunded one is dropped rather than netted.
+        assertEquals(5, preview.rows.size)
+        assertEquals(2, preview.skippedCount)
+        assertTrue(preview.skippedReasons.any { it.contains("/") })
+        assertTrue(preview.skippedReasons.any { it.contains("退款") })
+
+        val byMerchant = preview.rows.associateBy { it.merchant }
+        assertEquals("2026-09-18", byMerchant.getValue("某科技公司").dateKey)
+        // 46283.7948... is 2026-09-18 19:04 in Excel's 1900 system.
+        assertEquals(19, byMerchant.getValue("某科技公司").time?.hour)
+        assertEquals(4, byMerchant.getValue("某科技公司").time?.minute)
+        assertEquals("购买钱包", byMerchant.getValue("某科技公司").note)
+        assertEquals(350L, byMerchant.getValue("某科技公司").amountCents)
+
+        // A 转账 row carries a real direction, so it is income, not a neutral transfer.
+        val gift = byMerchant.getValue("三姑 (范美清)")
+        assertEquals(TxnType.INCOME, gift.type)
+        assertEquals(200000L, gift.amountCents)
+        assertEquals(0, preview.inferredCount)
+
+        // 45.00 with 2.00 refunded: the row is left out rather than guessed at.
+        assertNull(byMerchant["拼多多"])
+    }
+
+    @Test
+    fun `a partial refund is reported rather than silently netted`() {
+        val preview = CsvImport.parseFile("账单.xlsx", buildXlsx(realWechatSheet()))
+        assertTrue(
+            "the skipped reasons must name the refund, not just the count",
+            preview.skippedReasons.any { it.contains("已退款(¥2.00)") },
+        )
+    }
+
+    @Test
+    fun `one moment written as text and as a serial hashes the same`() {
+        // WeChat's CSV says 2026-09-18 19:04:37 and its xlsx says 46283.79487268518.
+        // Rounding the serial to the nearest minute made these 19:05 and 19:04, so the
+        // same bill imported twice produced duplicate rows instead of being deduped.
+        val csv = "交易时间,交易对方,商品,收/支,金额(元),当前状态\n" +
+            "2026-09-18 19:04:37,某店,购物袋,支出,3.50,支付成功\n"
+        val sheet = listOf(
+            listOf("交易时间", "交易对方", "商品", "收/支", "金额(元)", "当前状态"),
+            listOf(46283.79487268518, "某店", "购物袋", "支出", 3.5, "支付成功"),
+        )
+
+        val fromCsv = CsvImport.parse(csv).rows.single()
+        val fromXlsx = CsvImport.parseFile("账单.xlsx", buildXlsx(sheet)).rows.single()
+
+        assertEquals(LocalTime.of(19, 4), fromXlsx.time)
+        assertEquals(LocalTime.of(19, 4), fromCsv.time)
+        assertEquals(fromCsv.dedupeHash, fromXlsx.dedupeHash)
+    }
+
+    @Test
+    fun `a serial for a whole minute does not slip to the minute before`() {
+        // 19:05:00 as a serial; flooring the fraction would give 19:04.
+        val sheet = listOf(
+            listOf("交易时间", "收/支", "金额", "交易对方", "当前状态"),
+            listOf(46283.795138888888, "支出", 1.0, "某店", "支付成功"),
+        )
+        assertEquals(LocalTime.of(19, 5), CsvImport.parseFile("账单.xlsx", buildXlsx(sheet)).rows.single().time)
+    }
+
+    // ------------------------------------------------- identity is the bill's own number
+
+    @Test
+    fun `a row is recognised by its transaction number even when the note changed`() {
+        // The importer's own rules produce the note and the timestamp, so changing those
+        // rules changes every fingerprint. A real ledger hit this: 100 rows in one file,
+        // 79 imported by an earlier version, and only 2 of them matched the new hash.
+        // The bill's 交易单号 does not move.
+        val bill = "交易时间,交易对方,商品,收/支,金额(元),交易单号,当前状态,备注\n" +
+            "2026-09-18 19:04:37,某店,购物袋,支出,3.50,4500000460202609187721346426,支付成功,/\n"
+        val row = CsvImport.parse(bill).rows.single()
+        assertEquals("购物袋", row.note)
+        // A row the same bill produced before the placeholder fix: same number, other note.
+        val stored = row.copy(note = "购物袋 /", time = LocalTime.of(19, 5))
+
+        assertNotEquals(row.dedupeHash, stored.dedupeHash)
+        assertTrue(
+            CsvImport.isAlreadyImported(
+                row,
+                dedupeHashes = setOf(stored.dedupeHash),
+                externalNos = setOf(stored.externalNo!!),
+            )
+        )
+    }
+
+    @Test
+    fun `without a transaction number the fingerprint is still what decides`() {
+        val bill = "交易时间,交易对方,商品,收/支,金额(元),当前状态\n" +
+            "2026-09-18 19:04:37,某店,购物袋,支出,3.50,支付成功\n"
+        val row = CsvImport.parse(bill).rows.single()
+        assertNull(row.externalNo)
+        assertFalse(CsvImport.isAlreadyImported(row, emptySet(), emptySet()))
+        assertTrue(CsvImport.isAlreadyImported(row, setOf(row.dedupeHash), emptySet()))
+    }
+
+    @Test
+    fun `a different transaction number is not treated as a duplicate`() {
+        val bill = "交易时间,交易对方,商品,收/支,金额(元),交易单号,当前状态\n" +
+            "2026-09-18 19:04:37,某店,购物袋,支出,3.50,4500000460202609187721346426,支付成功\n"
+        val row = CsvImport.parse(bill).rows.single()
+        assertFalse(
+            CsvImport.isAlreadyImported(row, emptySet(), setOf("4500000460202609180000000000"))
+        )
+    }
+
     // ------------------------------------------------------------------- helpers
 
     /** Excel's column letters: 0 -> A, 26 -> AA. */

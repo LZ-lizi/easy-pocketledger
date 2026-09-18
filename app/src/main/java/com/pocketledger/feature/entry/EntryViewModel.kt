@@ -21,6 +21,7 @@ import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.InstallmentSchedule
 import com.pocketledger.domain.KeypadInput
 import com.pocketledger.domain.Money
+import com.pocketledger.domain.QuickCategories
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -145,9 +146,8 @@ data class EntryUiState(
      *
      * Always the most-used items for expenses, never everything: the outermost screen is
      * for the handful of categories that carry most entries, and the rest live one tap
-     * away behind 「更多」. With no explicit pinning the first
-     * [DEFAULT_PRIMARY_CATEGORIES] of the usage ordering stand in, which is the same
-     * promise the pinned set makes.
+     * away behind 「更多」. With no explicit pinning [QuickCategories] supplies the
+     * defaults, which is the same promise the pinned set makes.
      *
      * Income is never collapsed. There are six income items in the presets, they fit on
      * one screen, and hiding the one you want behind a second tap buys nothing -- the
@@ -161,9 +161,9 @@ data class EntryUiState(
         get() {
             val all = orderedCategories
             if (kind == CategoryKind.INCOME) return all
-            if (pinnedCategoryIds.isEmpty()) return all.take(DEFAULT_PRIMARY_CATEGORIES)
+            if (pinnedCategoryIds.isEmpty()) return QuickCategories.select(all, recentCategoryIds)
             val pinned = all.filter { it.id in pinnedCategoryIds }
-            return pinned.ifEmpty { all.take(DEFAULT_PRIMARY_CATEGORIES) }
+            return pinned.ifEmpty { QuickCategories.select(all, recentCategoryIds) }
         }
 
     /** True when some categories are being held back behind 「更多」. */
@@ -255,8 +255,8 @@ data class EntryUiState(
         get() = accounts.filter { it.id != selectedAccountId }
 
     companion object {
-        /** Three rows of the four-column grid. */
-        const val DEFAULT_PRIMARY_CATEGORIES = 12
+        /** Three rows of the four-column grid; the count lives in [QuickCategories]. */
+        const val DEFAULT_PRIMARY_CATEGORIES = QuickCategories.COUNT
     }
 }
 

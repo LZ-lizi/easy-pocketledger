@@ -33,3 +33,6 @@ Thumbs.db
 
 # Local backups produced by the in-app backup feature (never commit user data)
 /backups/
+
+# Device screenshots taken while verifying: they show real merchants and amounts
+/.shots/

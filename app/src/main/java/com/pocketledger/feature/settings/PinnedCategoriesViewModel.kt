@@ -10,6 +10,7 @@ import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.prefs.AppPreferences
 import com.pocketledger.data.repo.LedgerRepository
+import com.pocketledger.domain.QuickCategories
 import com.pocketledger.feature.entry.EntryUiState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,7 +78,9 @@ class PinnedCategoriesViewModel(
         repository.selectedLedgerId,
     ) { categories, pinned, recent, ledgerId ->
         val ordered = orderLikeKeypad(categories, recent)
-        val resolved = pinned.ifEmpty { ordered.take(EntryUiState.DEFAULT_PRIMARY_CATEGORIES).map { it.id }.toSet() }
+        val resolved = pinned.ifEmpty {
+            QuickCategories.select(ordered, recent).map { it.id }.toSet()
+        }
         val roots = categories.filter { it.parentId == null }.sortedBy { it.sortOrder }
         PinnedCategoriesUiState(
             groups = roots.map { root ->
@@ -120,8 +123,7 @@ class PinnedCategoriesViewModel(
             // start from what the user can actually see, not from an empty set.
             val current = pinnedIds.value.ifEmpty {
                 val categories = repository.categoriesSnapshot()
-                orderLikeKeypad(categories, recentIds.value)
-                    .take(EntryUiState.DEFAULT_PRIMARY_CATEGORIES)
+                QuickCategories.select(orderLikeKeypad(categories, recentIds.value), recentIds.value)
                     .map { it.id }
                     .toSet()
             }

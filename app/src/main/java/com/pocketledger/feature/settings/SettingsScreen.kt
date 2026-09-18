@@ -79,7 +79,7 @@ fun SettingsScreen(
         SettingsSection(
             title = "关于",
             entries = listOf(
-                SettingsEntry("关于记账本", "版本、当前账本、数据存放位置", onOpenAbout),
+                SettingsEntry("关于记账本", "版本、数据存放位置", onOpenAbout),
             ),
         ),
     )

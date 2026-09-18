@@ -384,8 +384,36 @@ class LedgerRepository(
 
     // ---------------------------------------------------------------------- import
 
-    fun observeImportBatches(): Flow<List<ImportBatchEntity>> =
-        scoped { importDao.observeBatches(it) }
+    /**
+     * The import screen is the one place that reads and writes a ledger the user is not
+     * currently looking at.
+     *
+     * A bill already knows which ledger it belongs to, and making the user switch the
+     * whole app over first -- then navigate back into settings -- is a detour for
+     * something they can simply state on the screen they are already on. So every import
+     * call takes the ledger explicitly rather than going through [scoped]/[writeLedgerId],
+     * the same way the budget and allowance routes already do. The wrong ledger here is
+     * not a display bug: it would file a hundred transactions into the wrong book.
+     */
+    fun observeImportBatchesFor(ledgerId: Long): Flow<List<ImportBatchEntity>> =
+        importDao.observeBatches(ledgerId)
+
+    suspend fun categoriesSnapshotFor(ledgerId: Long): List<CategoryEntity> =
+        categoryDao.all(ledgerId)
+
+    suspend fun accountsSnapshotFor(ledgerId: Long): List<AccountEntity> =
+        accountDao.all(ledgerId)
+
+    /**
+     * A 累计模式 ledger's single hidden account.
+     *
+     * Such a ledger shows no account anywhere by design, and the import screen used to
+     * refuse to run in one: it told the user to go and create an account on the page that
+     * will not show the one it already has. The hidden account is exactly what the entry
+     * keypad falls back to, so the import falls back to it too.
+     */
+    suspend fun hiddenAccountsSnapshotFor(ledgerId: Long): List<AccountEntity> =
+        accountDao.observeHidden(ledgerId).first()
 
     /**
      * Keywords the user has already filed, as `keyword -> categoryId`.
@@ -394,27 +422,34 @@ class LedgerRepository(
      * a time, and a mid-import change to the rules would make the preview disagree
      * with itself.
      */
-    suspend fun importRules(): Map<String, Long> {
-        val ledgerId = currentLedgerId.value ?: return emptyMap()
-        return importDao.rules(ledgerId)
+    suspend fun importRulesFor(ledgerId: Long): Map<String, Long> =
+        importDao.rules(ledgerId)
             .mapNotNull { rule -> rule.categoryId?.let { rule.keyword to it } }
             .toMap()
-    }
+
+    /** Dedupe fingerprints already present in the target ledger. */
+    suspend fun existingDedupeHashesFor(ledgerId: Long): Set<String> =
+        txnDao.allDedupeHashes(ledgerId).toSet()
+
+    /** Bill transaction numbers already present in the target ledger. */
+    suspend fun existingExternalNosFor(ledgerId: Long): Set<String> =
+        txnDao.allExternalNos(ledgerId).toSet()
 
     /** Records one import so it can be shown and undone as a unit. */
-    suspend fun addImportBatch(batch: ImportBatchEntity): Long =
-        importDao.insertBatch(batch.copy(ledgerId = writeLedgerId()))
+    suspend fun addImportBatchFor(ledgerId: Long, batch: ImportBatchEntity): Long =
+        importDao.insertBatch(batch.copy(ledgerId = ledgerId))
 
     /** Writes imported rows in one call, stamped with their batch and ledger. */
-    suspend fun addImportedTransactions(batchId: Long, txns: List<TxnEntity>): List<Long> {
-        val ledgerId = writeLedgerId()
-        return txnDao.insertAll(txns.map { it.copy(ledgerId = ledgerId, importBatchId = batchId) })
-    }
+    suspend fun addImportedTransactionsFor(
+        ledgerId: Long,
+        batchId: Long,
+        txns: List<TxnEntity>,
+    ): List<Long> =
+        txnDao.insertAll(txns.map { it.copy(ledgerId = ledgerId, importBatchId = batchId) })
 
     /** Remembers the category decisions made during an import. */
-    suspend fun rememberImportRules(keywordToCategory: Map<String, Long>) {
+    suspend fun rememberImportRulesFor(ledgerId: Long, keywordToCategory: Map<String, Long>) {
         if (keywordToCategory.isEmpty()) return
-        val ledgerId = writeLedgerId()
         importDao.upsertRules(
             keywordToCategory.map { (keyword, categoryId) ->
                 ImportRuleEntity(ledgerId = ledgerId, keyword = keyword, categoryId = categoryId)

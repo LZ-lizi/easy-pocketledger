@@ -9,6 +9,7 @@ import com.pocketledger.LedgerApp
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.ImportBatchEntity
+import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.data.entity.TxnSource
 import com.pocketledger.data.entity.TxnType
@@ -18,12 +19,16 @@ import com.pocketledger.domain.CategoryMatcher
 import com.pocketledger.domain.CsvImport
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.ImportFormat
-import com.pocketledger.domain.ImportPreview
 import com.pocketledger.domain.ImportRow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +49,7 @@ data class ImportRowView(
     val categoryId: Long?,
     val categoryName: String?,
     /**
-     * Already present in this ledger.
+     * Already present in the target ledger.
      *
      * Kept in the list rather than dropped: a user who sees "12 rows, 12 skipped" needs
      * to know *which* rows were skipped, and a silently shorter list reads as a bug.
@@ -68,6 +73,16 @@ data class ImportUiState(
     val categories: List<CategoryEntity> = emptyList(),
     val accounts: List<AccountEntity> = emptyList(),
     val accountId: Long? = null,
+    /**
+     * True when [accountId] is a 累计模式 ledger's hidden account.
+     *
+     * Such a ledger owns no pickable account, so the review shows one line explaining
+     * where the rows will land instead of an empty picker the user cannot act on.
+     */
+    val accountIsImplicit: Boolean = false,
+    /** Ledgers the bill may be filed into; a bill can belong to any of them. */
+    val ledgers: List<LedgerEntity> = emptyList(),
+    val targetLedgerId: Long? = null,
     val skippedCount: Int = 0,
     val skippedReasons: List<String> = emptyList(),
     val batches: List<ImportBatchView> = emptyList(),
@@ -99,6 +114,8 @@ data class ImportUiState(
 
     /** True when every row is excluded because the file is already in the ledger. */
     val allDuplicates: Boolean get() = rows.isNotEmpty() && duplicateCount == rows.size
+
+    val targetLedgerName: String? get() = ledgers.firstOrNull { it.id == targetLedgerId }?.name
 }
 
 /**
@@ -108,8 +125,17 @@ data class ImportUiState(
  * written: an importer that writes first and asks later is how a ledger ends up with
  * three hundred uncategorised rows and no way to tell which came from where.
  *
+ * The target ledger is chosen on this screen rather than inherited from whatever happens
+ * to be selected. Importing is a deliberate act about one file, and the file already
+ * knows where it belongs -- a bank export is not "wherever the app was pointed". Every
+ * read below (categories, accounts, existing fingerprints, learned rules) and every write
+ * therefore takes the target ledger explicitly, and changing it re-runs the whole review
+ * against the new one: the duplicate flags and the category matches are properties of the
+ * ledger, not of the file.
+ *
  * Nothing is committed until 「导入」, and the whole batch can be undone afterwards.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportUiState())
@@ -117,23 +143,100 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            repository.observeImportBatches().collect { batches ->
+            repository.observeLedgers().collect { all ->
+                val active = all.filter { !it.isArchived }
                 _uiState.update { state ->
-                    state.copy(batches = batches.map { ImportBatchView(it, sourceLabel(it.source)) })
+                    // Keep the user's choice if it still exists; otherwise fall back to
+                    // the ledger the app is on, then to anything.
+                    val keep = state.targetLedgerId?.takeIf { id -> active.any { it.id == id } }
+                    val selected = repository.selectedLedgerId.value
+                    state.copy(
+                        ledgers = active,
+                        targetLedgerId = keep
+                            ?: selected?.takeIf { id -> active.any { it.id == id } }
+                            ?: active.firstOrNull()?.id,
+                    )
                 }
+                reload()
             }
         }
+
         viewModelScope.launch {
-            val accounts = repository.accountsSnapshot()
-            val categories = repository.categoriesSnapshot()
+            _uiState
+                .map { it.targetLedgerId }
+                .distinctUntilChanged()
+                .filterNotNull()
+                .flatMapLatest { ledgerId ->
+                    repository.observeImportBatchesFor(ledgerId)
+                }
+                .collect { batches ->
+                    _uiState.update { state ->
+                        state.copy(batches = batches.map { ImportBatchView(it, sourceLabel(it.source)) })
+                    }
+                }
+        }
+    }
+
+    /**
+     * Re-reads everything that depends on the target ledger.
+     *
+     * [rematch] is false only right after a commit, when the row list is already empty.
+     */
+    private fun reload(rematch: Boolean = true) {
+        viewModelScope.launch {
+            val ledgerId = _uiState.value.targetLedgerId ?: return@launch
+            _uiState.update { it.copy(busy = true) }
+            val categories = repository.categoriesSnapshotFor(ledgerId)
+            val pickable = repository.accountsSnapshotFor(ledgerId)
+            // A 累计模式 ledger has no pickable account and never will; its hidden one is
+            // what the entry keypad already uses for exactly this reason.
+            val implicit = pickable.isEmpty()
+            val accounts = if (implicit) repository.hiddenAccountsSnapshotFor(ledgerId) else pickable
+            val rules = repository.importRulesFor(ledgerId)
+            val existing = repository.existingDedupeHashesFor(ledgerId)
+            val externalNos = repository.existingExternalNosFor(ledgerId)
+
             _uiState.update { state ->
+                val rows = if (!rematch) {
+                    state.rows
+                } else {
+                    state.rows.map { view ->
+                        val duplicate = CsvImport.isAlreadyImported(view.row, existing, externalNos)
+                        val categoryId =
+                            if (duplicate) null else CategoryMatcher.match(view.row, categories, rules)
+                        view.copy(
+                            categoryId = categoryId,
+                            categoryName = categories.firstOrNull { it.id == categoryId }?.name,
+                            alreadyImported = duplicate,
+                            // Re-derived, not preserved: a row the user had unticked
+                            // because it was already in ledger A must come back ticked
+                            // when ledger B turns out not to have it. Silently
+                            // under-importing is the worse failure.
+                            include = !duplicate,
+                        )
+                    }
+                }
                 state.copy(
-                    accounts = accounts,
+                    busy = false,
                     categories = categories,
-                    accountId = state.accountId ?: accounts.firstOrNull()?.id,
+                    accounts = accounts,
+                    // Never carry an account id across ledgers: ids are per ledger and a
+                    // stale one would attach every row to another book's account.
+                    accountId = accounts.firstOrNull { it.id == state.accountId }?.id
+                        ?: accounts.firstOrNull()?.id,
+                    accountIsImplicit = implicit,
+                    importRules = rules,
+                    rows = rows,
                 )
             }
         }
+    }
+
+    /** Files the current review into a different ledger. */
+    fun selectTargetLedger(ledgerId: Long) {
+        if (_uiState.value.targetLedgerId == ledgerId) return
+        _uiState.update { it.copy(targetLedgerId = ledgerId, message = null) }
+        reload()
     }
 
     /**
@@ -149,13 +252,21 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
             // One entry point for both shapes: the importer decides from the bytes, so
             // the picker cannot hand it something it mishandles.
             val preview = withContext(Dispatchers.Default) { CsvImport.parseFile(fileName, bytes) }
-            val existing = repository.existingDedupeHashes()
-            val rules = repository.importRules()
-            val categories = repository.categoriesSnapshot()
-            val accounts = repository.accountsSnapshot()
+            val ledgerId = _uiState.value.targetLedgerId
+            val categories = ledgerId?.let { repository.categoriesSnapshotFor(it) } ?: emptyList()
+            val pickable = ledgerId?.let { repository.accountsSnapshotFor(it) } ?: emptyList()
+            val implicit = ledgerId != null && pickable.isEmpty()
+            val accounts = when {
+                ledgerId == null -> emptyList()
+                implicit -> repository.hiddenAccountsSnapshotFor(ledgerId)
+                else -> pickable
+            }
+            val existing = ledgerId?.let { repository.existingDedupeHashesFor(it) } ?: emptySet()
+            val externalNos = ledgerId?.let { repository.existingExternalNosFor(it) } ?: emptySet()
+            val rules = ledgerId?.let { repository.importRulesFor(it) } ?: emptyMap()
 
             val views = preview.rows.map { row ->
-                val duplicate = row.dedupeHash in existing
+                val duplicate = CsvImport.isAlreadyImported(row, existing, externalNos)
                 val categoryId = if (duplicate) null else CategoryMatcher.match(row, categories, rules)
                 ImportRowView(
                     row = row,
@@ -177,7 +288,8 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
                     rows = views,
                     categories = categories,
                     accounts = accounts,
-                    accountId = state.accountId ?: accounts.firstOrNull()?.id,
+                    accountId = accounts.firstOrNull()?.id,
+                    accountIsImplicit = implicit,
                     skippedCount = preview.skippedCount,
                     skippedReasons = preview.skippedReasons,
                     importRules = rules,
@@ -296,10 +408,11 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
         }
     }
 
-    /** Writes the reviewed rows as one batch. */
+    /** Writes the reviewed rows into the target ledger as one batch. */
     fun commitImport() {
         val state = _uiState.value
         val accountId = state.accountId ?: return
+        val ledgerId = state.targetLedgerId ?: return
         val selected = state.selected
         if (selected.isEmpty() || state.busy) return
 
@@ -311,28 +424,31 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
             // The batch row is written first so its id can stamp every transaction. If
             // the insert below fails, the worst case is an empty batch record, which
             // the list shows as a zero-row import rather than losing anything.
-            val batchId = repository.addImportBatch(
+            val batchId = repository.addImportBatchFor(
+                ledgerId,
                 ImportBatchEntity(
                     source = source,
                     fileName = state.fileName,
                     txnCount = selected.size,
                     skippedCount = state.skippedCount + state.duplicateCount,
-                )
+                ),
             )
 
-            repository.addImportedTransactions(
+            repository.addImportedTransactionsFor(
+                ledgerId,
                 batchId,
                 selected.map { view -> view.toEntity(accountId, source) },
             )
 
             // Only decisions that produced a row are learned; remembering a category
             // for a row the user excluded would teach the matcher from a rejection.
-            repository.rememberImportRules(
+            repository.rememberImportRulesFor(
+                ledgerId,
                 selected.mapNotNull { view ->
                     val keyword = CategoryMatcher.keywordFor(view.row)
                     val categoryId = view.categoryId
                     if (keyword != null && categoryId != null) keyword to categoryId else null
-                }.toMap()
+                }.toMap(),
             )
 
             _uiState.update {
@@ -359,7 +475,8 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
         }
     }
 
-    private fun ImportRowView.toEntity(accountId: Long, source: TxnSource): TxnEntity {        val time = row.time
+    private fun ImportRowView.toEntity(accountId: Long, source: TxnSource): TxnEntity {
+        val time = row.time
         return TxnEntity(
             type = row.type,
             amountCents = row.amountCents,
