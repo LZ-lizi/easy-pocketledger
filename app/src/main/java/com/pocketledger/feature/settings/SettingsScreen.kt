@@ -47,6 +47,7 @@ fun SettingsScreen(
     onOpenCategories: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenInstallments: () -> Unit,
+    onOpenBudget: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -61,6 +62,7 @@ fun SettingsScreen(
             title = "记账",
             entries = listOf(
                 SettingsEntry("类别管理", "增删改类别，调整大类归属", onOpenCategories),
+                SettingsEntry("预算", "总预算 / 大类 / 单类上限与超支提醒", onOpenBudget),
                 SettingsEntry("月付/白条", "分期计划与到期自动扣款", onOpenInstallments),
                 SettingsEntry("学期设置", "统计页「学期」用的日期区间", onOpenTerms),
             ),

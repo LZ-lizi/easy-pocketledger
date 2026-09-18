@@ -13,11 +13,17 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,6 +32,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pocketledger.feature.accounts.AccountsScreen
 import com.pocketledger.feature.accounts.AccountsViewModel
+import com.pocketledger.feature.budget.BudgetSettingsScreen
+import com.pocketledger.feature.budget.BudgetViewModel
 import com.pocketledger.feature.categories.CategorySettingsScreen
 import com.pocketledger.feature.categories.CategorySettingsViewModel
 import com.pocketledger.feature.detail.DetailScreen
@@ -67,6 +75,7 @@ object Routes {
     const val LEDGERS = "ledgers"
     const val CATEGORIES = "categories"
     const val INSTALLMENTS = "installments"
+    const val BUDGET = "budget"
     const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
@@ -101,6 +110,20 @@ fun AppShell() {
     val container = rememberAppContainer()
     val startupComplete by container.startupComplete.collectAsStateWithLifecycle()
     val ledgerId by container.repository.selectedLedgerId.collectAsStateWithLifecycle()
+
+    // There is no server to push a warning, so the budget check runs whenever the app
+    // comes back to the foreground: that is the moment the user is about to look.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner, ledgerId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch { container.checkBudgetAlerts() }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     when {
         !startupComplete -> StartupPlaceholder()
@@ -199,6 +222,7 @@ private fun LedgerNavHost() {
                     onOpenLedgers = { navController.navigate(Routes.LEDGERS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenInstallments = { navController.navigate(Routes.INSTALLMENTS) },
+                    onOpenBudget = { navController.navigate(Routes.BUDGET) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
                 )
@@ -228,6 +252,15 @@ private fun LedgerNavHost() {
                 val viewModel: InstallmentSettingsViewModel =
                     viewModel(factory = InstallmentSettingsViewModel.Factory)
                 InstallmentSettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.BUDGET) {
+                val viewModel: BudgetViewModel = viewModel(factory = BudgetViewModel.Factory)
+                BudgetSettingsScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },

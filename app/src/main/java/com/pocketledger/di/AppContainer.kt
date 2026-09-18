@@ -1,8 +1,11 @@
 package com.pocketledger.di
 
 import android.content.Context
+import com.pocketledger.data.BudgetAlertChecker
 import com.pocketledger.data.InstallmentRunner
 import com.pocketledger.data.LedgerDatabase
+import com.pocketledger.data.prefs.AppPreferences
+import com.pocketledger.notify.BudgetNotifier
 import com.pocketledger.data.Presets
 import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
@@ -43,6 +46,7 @@ class AppContainer(context: Context) {
             categoryDao = db.categoryDao(),
             txnDao = db.txnDao(),
             allowanceDao = db.allowanceDao(),
+            budgetDao = db.budgetDao(),
             tagDao = db.tagDao(),
             termDao = db.termDao(),
             installmentDao = db.installmentDao(),
@@ -62,6 +66,17 @@ class AppContainer(context: Context) {
     /** Catch-up for instalment plans that fell due while the app was closed. */
     private val installmentRunner: InstallmentRunner by lazy { InstallmentRunner(repository) }
 
+    private val preferences: AppPreferences by lazy { AppPreferences(appContext) }
+
+    private val budgetNotifier: BudgetNotifier by lazy { BudgetNotifier(appContext) }
+
+    private val budgetAlertChecker: BudgetAlertChecker by lazy {
+        BudgetAlertChecker(repository, preferences, budgetNotifier)
+    }
+
+    /** Posts any budget warning that has not been reported yet for this month. */
+    suspend fun checkBudgetAlerts(): Int = budgetAlertChecker.check()
+
     init {
         appScope.launch {
             adoptPreLedgerDataIfNeeded()
@@ -69,6 +84,7 @@ class AppContainer(context: Context) {
             // Instalments are caught up before startup is declared complete, so the
             // first frame already includes any charge that came due while closed.
             runCatching { installmentRunner.run() }
+            runCatching { budgetAlertChecker.check() }
             _startupComplete.value = true
         }
     }

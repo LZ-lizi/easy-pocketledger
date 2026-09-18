@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.pocketledger.data.dao.AccountDao
 import com.pocketledger.data.dao.AllowanceDao
+import com.pocketledger.data.dao.BudgetDao
 import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.InstallmentDao
 import com.pocketledger.data.dao.LedgerDao
@@ -65,6 +66,7 @@ abstract class LedgerDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun txnDao(): TxnDao
     abstract fun allowanceDao(): AllowanceDao
+    abstract fun budgetDao(): BudgetDao
     abstract fun tagDao(): TagDao
     abstract fun termDao(): TermDao
     abstract fun installmentDao(): InstallmentDao

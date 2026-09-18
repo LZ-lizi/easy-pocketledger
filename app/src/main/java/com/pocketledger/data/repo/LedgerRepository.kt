@@ -3,6 +3,8 @@ package com.pocketledger.data.repo
 import com.pocketledger.data.dao.AccountBalance
 import com.pocketledger.data.dao.AccountDao
 import com.pocketledger.data.dao.AllowanceDao
+import com.pocketledger.data.dao.BudgetDao
+import com.pocketledger.data.dao.BudgetWithName
 import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.CategoryTotal
 import com.pocketledger.data.dao.DayTotal
@@ -18,6 +20,9 @@ import com.pocketledger.data.dao.TxnDao
 import com.pocketledger.data.dao.TxnRow
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AllowanceEntity
+import com.pocketledger.data.entity.BudgetEntity
+import com.pocketledger.data.entity.BudgetPeriodType
+import com.pocketledger.data.entity.BudgetScope
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.InstallmentPeriodEntity
@@ -54,6 +59,7 @@ class LedgerRepository(
     private val categoryDao: CategoryDao,
     private val txnDao: TxnDao,
     private val allowanceDao: AllowanceDao,
+    private val budgetDao: BudgetDao,
     private val tagDao: TagDao,
     private val termDao: TermDao,
     private val installmentDao: InstallmentDao,
@@ -317,6 +323,37 @@ class LedgerRepository(
 
     suspend fun clearAllowance(monthKey: String) {
         currentLedgerId.value?.let { allowanceDao.deletePeriod(it, monthKey) }
+    }
+
+    // -------------------------------------------------------------------- budgets
+
+    /**
+     * Caps for one month.
+     *
+     * `categoryId == 0` is the overall cap, a top-level category id is that 大类's
+     * cap, and a leaf id is a single category's cap. One table covers all three
+     * levels because a 大类 is an ordinary category row.
+     */
+    fun observeBudgets(periodKey: String): Flow<List<BudgetWithName>> =
+        scoped { budgetDao.observeForPeriodWithNames(it, BudgetPeriodType.MONTH, periodKey) }
+
+    /** Setting zero clears the cap rather than storing a meaningless zero. */
+    suspend fun setBudget(periodKey: String, categoryId: Long, amountCents: Long) {
+        val ledgerId = writeLedgerId()
+        if (amountCents <= 0L) {
+            budgetDao.delete(ledgerId, BudgetPeriodType.MONTH, periodKey, categoryId)
+        } else {
+            budgetDao.upsert(
+                BudgetEntity(
+                    ledgerId = ledgerId,
+                    periodType = BudgetPeriodType.MONTH,
+                    periodKey = periodKey,
+                    scope = if (categoryId == 0L) BudgetScope.TOTAL else BudgetScope.BY_CATEGORY,
+                    categoryId = categoryId,
+                    amountCents = amountCents,
+                )
+            )
+        }
     }
 
     // ----------------------------------------------------------------------- tags
