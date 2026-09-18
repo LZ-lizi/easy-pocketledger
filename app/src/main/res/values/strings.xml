@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">记账本</string>
+    <string name="widget_small_label">记账本 · 本月</string>
+    <string name="widget_small_description">本月支出或剩余生活费，一键记一笔</string>
+    <string name="widget_wide_label">记账本 · 本月概览</string>
+    <string name="widget_wide_description">本月支出、生活费进度，一键记一笔</string>
 </resources>

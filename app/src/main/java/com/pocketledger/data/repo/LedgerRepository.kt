@@ -28,18 +28,44 @@ import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.InstallmentPeriodEntity
 import com.pocketledger.data.entity.InstallmentPlanEntity
 import com.pocketledger.data.entity.LedgerEntity
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TagEntity
 import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.domain.DateKeys
+import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+
+/** Wide enough to cover any date a person will enter, and still a plain string range. */
+private const val WIDE_START_KEY = "0000-01-01"
+private const val WIDE_END_KEY = "9999-12-31"
+
+/** The small, read-only summary a home-screen widget renders. */
+data class WidgetSnapshot(
+    val ledgerName: String,
+    val ledgerType: LedgerType,
+    val monthExpenseCents: Long,
+    /** Zero when the ledger has no allowance configured. */
+    val allowanceCents: Long,
+) {
+    /** Null when there is nothing to measure against. */
+    val remainingCents: Long? get() = allowanceCents.takeIf { it > 0L }?.minus(monthExpenseCents)
+
+    val progress: Float
+        get() = if (allowanceCents <= 0L) {
+            0f
+        } else {
+            (monthExpenseCents.toDouble() / allowanceCents.toDouble()).coerceIn(0.0, 1.0).toFloat()
+        }
+}
 
 /**
  * Single entry point to the data layer.
@@ -114,6 +140,26 @@ class LedgerRepository(
     suspend fun ledgerCount(): Int = ledgerDao.count()
 
     suspend fun ledgerMaxSortOrder(): Int = ledgerDao.maxSortOrder()
+
+    /**
+     * What a home-screen widget shows.
+     *
+     * Read with an explicit ledger rather than the selected one: a widget may be the
+     * only reason the process started, so nothing has set the selection yet.
+     */
+    suspend fun widgetSnapshot(today: LocalDate = LocalDate.now()): WidgetSnapshot? {
+        val ledger = ledgerDao.active().firstOrNull() ?: return null
+        val periodKey = DateKeys.monthKey(today)
+        val (start, end) = DateKeys.monthRange(periodKey)
+        val totals = txnDao.observeTotals(ledger.id, start, end, null).first()
+        val allowance = allowanceDao.effectiveFor(ledger.id, periodKey)
+        return WidgetSnapshot(
+            ledgerName = ledger.name,
+            ledgerType = ledger.type,
+            monthExpenseCents = totals.expenseCents,
+            allowanceCents = allowance?.amountCents ?: 0L,
+        )
+    }
 
     suspend fun addLedger(ledger: LedgerEntity): Long = ledgerDao.insert(ledger)
 
@@ -296,6 +342,18 @@ class LedgerRepository(
         currentLedgerId.value?.let { txnDao.recentCategoryIds(it, limit) } ?: emptyList()
 
     suspend fun transactionCount(): Int = currentLedgerId.value?.let { txnDao.count(it) } ?: 0
+
+    /**
+     * Every row in the current ledger, for export.
+     *
+     * Uses a deliberately wide date range rather than a new "select all" query: the
+     * existing one is already indexed on `localDateKey`, and adding a second query
+     * shape for one caller is how two code paths start disagreeing.
+     */
+    suspend fun allRowsForExport(): List<TxnRow> {
+        val ledgerId = currentLedgerId.value ?: return emptyList()
+        return txnDao.observeRows(ledgerId, WIDE_START_KEY, WIDE_END_KEY, null).first()
+    }
 
     suspend fun existingDedupeHashes(): Set<String> =
         currentLedgerId.value?.let { txnDao.allDedupeHashes(it).toSet() } ?: emptySet()

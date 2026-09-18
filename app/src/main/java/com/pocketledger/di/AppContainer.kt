@@ -6,6 +6,7 @@ import com.pocketledger.data.InstallmentRunner
 import com.pocketledger.data.LedgerDatabase
 import com.pocketledger.data.prefs.AppPreferences
 import com.pocketledger.notify.BudgetNotifier
+import com.pocketledger.widget.refreshLedgerWidgets
 import com.pocketledger.data.Presets
 import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
@@ -63,6 +64,11 @@ class AppContainer(context: Context) {
     /** Materialises due instalments; also called again after a plan is created. */
     suspend fun runInstallments(): Int = installmentRunner.run()
 
+    /** Re-renders any placed home-screen widgets after the data they show changed. */
+    suspend fun refreshWidgets() {
+        refreshLedgerWidgets(appContext)
+    }
+
     /** Catch-up for instalment plans that fell due while the app was closed. */
     private val installmentRunner: InstallmentRunner by lazy { InstallmentRunner(repository) }
 
@@ -88,6 +94,7 @@ class AppContainer(context: Context) {
             // first frame already includes any charge that came due while closed.
             runCatching { installmentRunner.run() }
             runCatching { budgetAlertChecker.check() }
+            refreshWidgets()
             _startupComplete.value = true
         }
     }

@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -45,6 +46,8 @@ import com.pocketledger.feature.detail.DetailScreen
 import com.pocketledger.feature.detail.DetailViewModel
 import com.pocketledger.feature.edit.EditScreen
 import com.pocketledger.feature.edit.EditViewModel
+import com.pocketledger.feature.export.ExportScreen
+import com.pocketledger.feature.export.ExportViewModel
 import com.pocketledger.feature.entry.EntryScreen
 import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
@@ -56,6 +59,8 @@ import com.pocketledger.feature.onboarding.OnboardingViewModel
 import com.pocketledger.feature.settings.AboutScreen
 import com.pocketledger.feature.settings.LedgerSettingsScreen
 import com.pocketledger.feature.settings.LedgerSettingsViewModel
+import com.pocketledger.feature.settings.PinnedCategoriesScreen
+import com.pocketledger.feature.settings.PinnedCategoriesViewModel
 import com.pocketledger.feature.settings.SettingsScreen
 import com.pocketledger.feature.settings.TermSettingsScreen
 import com.pocketledger.feature.settings.TermSettingsViewModel
@@ -82,6 +87,8 @@ object Routes {
     const val INSTALLMENTS = "installments"
     const val BUDGET = "budget"
     const val BUDGET_ARG = "ledgerId"
+    const val PINNED = "pinned"
+    const val EXPORT = "export"
     const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
@@ -119,7 +126,10 @@ private val FULL_SCREEN_ROUTES = setOf(Routes.ENTRY, EDIT_ROUTE, DETAIL_ROUTE)
  * never flashes onboarding before its existing data is adopted into a ledger.
  */
 @Composable
-fun AppShell() {
+fun AppShell(
+    startEntry: Boolean = false,
+    onStartEntryHandled: () -> Unit = {},
+) {
     val container = rememberAppContainer()
     val startupComplete by container.startupComplete.collectAsStateWithLifecycle()
     val ledgerId by container.repository.selectedLedgerId.collectAsStateWithLifecycle()
@@ -146,7 +156,10 @@ fun AppShell() {
             OnboardingScreen(viewModel = viewModel)
         }
 
-        else -> LedgerNavHost()
+        else -> LedgerNavHost(
+            startEntry = startEntry,
+            onStartEntryHandled = onStartEntryHandled,
+        )
     }
 }
 
@@ -168,11 +181,23 @@ private fun StartupPlaceholder() {
  * navigation bar is a keypad that gets mis-tapped.
  */
 @Composable
-private fun LedgerNavHost() {
+private fun LedgerNavHost(
+    startEntry: Boolean,
+    onStartEntryHandled: () -> Unit,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isOverlay = currentRoute in FULL_SCREEN_ROUTES
+
+    // A home-screen widget tap asks for the keypad directly. Handled here rather than
+    // in the widget so it still works when the app was already running.
+    LaunchedEffect(startEntry) {
+        if (startEntry) {
+            navController.navigate(Routes.ENTRY)
+            onStartEntryHandled()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -254,6 +279,8 @@ private fun LedgerNavHost() {
                     onOpenLedgers = { navController.navigate(Routes.LEDGERS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenInstallments = { navController.navigate(Routes.INSTALLMENTS) },
+                    onOpenPinned = { navController.navigate(Routes.PINNED) },
+                    onOpenExport = { navController.navigate(Routes.EXPORT) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
                 )
@@ -297,6 +324,25 @@ private fun LedgerNavHost() {
                 val ledgerId = entry.arguments?.getLong(Routes.BUDGET_ARG) ?: 0L
                 val viewModel: BudgetViewModel = viewModel(factory = BudgetViewModel.factory(ledgerId))
                 BudgetSettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.PINNED) {
+                val viewModel: PinnedCategoriesViewModel =
+                    viewModel(factory = PinnedCategoriesViewModel.Factory)
+                PinnedCategoriesScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.EXPORT) {
+                val viewModel: ExportViewModel = viewModel(factory = ExportViewModel.Factory)
+                ExportScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },

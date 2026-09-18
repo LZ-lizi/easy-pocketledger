@@ -47,6 +47,8 @@ fun SettingsScreen(
     onOpenCategories: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenInstallments: () -> Unit,
+    onOpenPinned: () -> Unit,
+    onOpenExport: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -54,15 +56,22 @@ fun SettingsScreen(
         SettingsSection(
             title = "账本",
             entries = listOf(
-                SettingsEntry("账本管理", "切换、新建、重命名、归档", onOpenLedgers),
+                SettingsEntry("账本管理", "新建、改名、归档，以及每个账本自己的预算", onOpenLedgers),
             ),
         ),
         SettingsSection(
             title = "记账",
             entries = listOf(
                 SettingsEntry("类别管理", "增删改类别，调整大类归属", onOpenCategories),
+                SettingsEntry("记账页显示", "选择哪些类别直接显示，其余收进「更多」", onOpenPinned),
                 SettingsEntry("月付", "分期计划与到期自动扣款", onOpenInstallments),
                 SettingsEntry("学期设置", "统计页「学期」用的日期区间", onOpenTerms),
+            ),
+        ),
+        SettingsSection(
+            title = "数据",
+            entries = listOf(
+                SettingsEntry("导出数据", "把当前账本导出为 CSV", onOpenExport),
             ),
         ),
         SettingsSection(
