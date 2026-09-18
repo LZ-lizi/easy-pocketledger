@@ -24,9 +24,12 @@ import com.pocketledger.domain.Money
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -140,17 +143,32 @@ data class EntryUiState(
     /**
      * The grid actually drawn.
      *
-     * Always the most-used items, never everything: the outermost screen is for the
-     * handful of categories that carry most entries, and the rest live one tap away
-     * behind 「更多」. With no explicit pinning the first [DEFAULT_PRIMARY_CATEGORIES]
-     * of the usage ordering stand in, which is the same promise the pinned set makes.
+     * Always the most-used items for expenses, never everything: the outermost screen is
+     * for the handful of categories that carry most entries, and the rest live one tap
+     * away behind 「更多」. With no explicit pinning the first
+     * [DEFAULT_PRIMARY_CATEGORIES] of the usage ordering stand in, which is the same
+     * promise the pinned set makes.
+     *
+     * Income is never collapsed. There are six income items in the presets, they fit on
+     * one screen, and hiding the one you want behind a second tap buys nothing -- the
+     * 「更多」 menu exists for the long tail of *spending* categories.
+     *
+     * A pinned set that resolves to no rows -- every pinned category deleted, or (as
+     * used to happen) the ids coming from a different ledger -- falls back to the
+     * defaults instead of producing an unusable empty grid.
      */
     val visibleCategories: List<CategoryEntity>
         get() {
             val all = orderedCategories
+            if (kind == CategoryKind.INCOME) return all
             if (pinnedCategoryIds.isEmpty()) return all.take(DEFAULT_PRIMARY_CATEGORIES)
-            return all.filter { it.id in pinnedCategoryIds }
+            val pinned = all.filter { it.id in pinnedCategoryIds }
+            return pinned.ifEmpty { all.take(DEFAULT_PRIMARY_CATEGORIES) }
         }
+
+    /** True when some categories are being held back behind 「更多」. */
+    val hasHiddenCategories: Boolean
+        get() = categoryGroups.isNotEmpty() && visibleCategories.size < orderedCategories.size
 
     /**
      * [visibleCategories]' full list, bucketed by 大类, for the 「更多」 menu.
@@ -248,6 +266,7 @@ data class EntryUiState(
  * Saving closes the screen: leaving it with the amount cleared and a lingering
  * "已记一笔" leaves it ambiguous whether the entry actually stuck.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class EntryViewModel(private val container: AppContainer) : ViewModel() {
 
     private val repository: LedgerRepository = container.repository
@@ -291,9 +310,15 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
             _uiState.update { it.copy(recentCategoryIds = recent) }
         }
         viewModelScope.launch {
-            container.appPreferences.pinnedCategoryIds().collect { pinned ->
-                _uiState.update { it.copy(pinnedCategoryIds = pinned) }
-            }
+            // Pinned ids are per ledger, so the preference has to be re-read whenever
+            // the ledger changes -- a set from another ledger names rows that do not
+            // exist here.
+            repository.selectedLedgerId
+                .filterNotNull()
+                .flatMapLatest { ledgerId -> container.appPreferences.pinnedCategoryIds(ledgerId) }
+                .collect { pinned ->
+                    _uiState.update { it.copy(pinnedCategoryIds = pinned) }
+                }
         }
     }
 

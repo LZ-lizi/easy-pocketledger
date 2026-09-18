@@ -52,22 +52,29 @@ class AppPreferences(private val context: Context) {
     /**
      * Categories shown on the first screen of the entry keypad.
      *
-     * Empty means "not customised yet", which the keypad reads as "use the defaults"
-     * rather than "show nothing" -- so a new install is immediately usable and a user
-     * who deliberately unpins everything still sees something.
+     * Keyed **per ledger**, because these are the ids of category rows: a set saved
+     * while looking at one ledger names rows that do not exist in another, and filtering
+     * by it there left the grid empty -- which is what happened to 累计模式 ledgers,
+     * whose category rows have entirely different ids from the 预算模式 ledger the
+     * preference was written in.
+     *
+     * Empty still means "not customised yet", which the keypad reads as "use the
+     * defaults" rather than "show nothing" -- so a new install is immediately usable
+     * and a user who deliberately unpins everything still sees something.
      */
-    private val pinnedCategories = stringSetPreferencesKey("pinned_category_ids")
+    private fun pinnedCategoriesKey(ledgerId: Long) =
+        stringSetPreferencesKey("pinned_category_ids_v2_$ledgerId")
 
-    fun pinnedCategoryIds(): Flow<Set<Long>> =
+    fun pinnedCategoryIds(ledgerId: Long): Flow<Set<Long>> =
         context.settingsStore.data.map { prefs ->
-            (prefs[pinnedCategories] ?: emptySet())
+            (prefs[pinnedCategoriesKey(ledgerId)] ?: emptySet())
                 .mapNotNull { it.toLongOrNull() }
                 .toSet()
         }
 
-    suspend fun setPinnedCategoryIds(ids: Set<Long>) {
+    suspend fun setPinnedCategoryIds(ledgerId: Long, ids: Set<Long>) {
         context.settingsStore.edit { prefs ->
-            prefs[pinnedCategories] = ids.map(Long::toString).toSet()
+            prefs[pinnedCategoriesKey(ledgerId)] = ids.map(Long::toString).toSet()
         }
     }
 

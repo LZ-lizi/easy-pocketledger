@@ -20,25 +20,23 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pocketledger.di.rememberAppContainer
 
 /**
- * Version, current ledger and where the data lives.
+ * Version and where the data lives.
  *
  * The storage note is not decoration: "纯本地" is the app's whole privacy story, and
  * someone deciding whether to trust it with their spending should be able to read
  * that without taking it on faith.
+ *
+ * The current ledger is deliberately not listed here -- it is already named in the
+ * header of 明细 and 账户, and repeating it in an "about" page answered a question
+ * nobody opens an about page to ask.
  */
 @Composable
 fun AboutScreen(
@@ -47,19 +45,11 @@ fun AboutScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val container = rememberAppContainer()
-    val ledgerId by container.repository.selectedLedgerId.collectAsStateWithLifecycle()
 
     val versionName = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "—"
-    }
-
-    // Reading the ledger is a suspend call, so it cannot happen inline in composition.
-    var ledgerName by remember(ledgerId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(ledgerId) {
-        ledgerName = ledgerId?.let { container.repository.ledger(it)?.name }
     }
 
     LazyColumn(
@@ -99,9 +89,6 @@ fun AboutScreen(
 
         item(key = "app") {
             InfoCard("记账本", "版本 $versionName")
-        }
-        item(key = "ledger") {
-            InfoCard("当前账本", ledgerName ?: "未选择")
         }
         item(key = "storage") {
             InfoCard(

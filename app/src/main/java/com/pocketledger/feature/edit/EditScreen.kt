@@ -171,7 +171,7 @@ fun EditScreen(
             onValueChange = viewModel::setMerchant,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("商家") },
+            label = { Text("交易对象") },
         )
         OutlinedTextField(
             value = state.note,

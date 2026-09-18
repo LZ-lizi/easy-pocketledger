@@ -348,7 +348,7 @@ private fun CategoryGrid(
                     onClick = { onSelect(category.id) },
                 )
             }
-            if (state.categoryGroups.isNotEmpty()) {
+            if (state.hasHiddenCategories) {
                 item(key = "more") {
                     MoreCell(
                         label = "更多",
@@ -953,7 +953,7 @@ private fun NoteField(
                 onValueChange = onMerchantChange,
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                placeholder = { Text("商家", style = MaterialTheme.typography.bodySmall) },
+                placeholder = { Text("交易对象", style = MaterialTheme.typography.bodySmall) },
                 textStyle = MaterialTheme.typography.bodySmall,
             )
         }

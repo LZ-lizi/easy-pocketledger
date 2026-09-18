@@ -32,7 +32,15 @@ class BudgetAlertChecker(
         val (start, end) = DateKeys.monthRange(periodKey)
 
         val budgets = repository.observeBudgets(periodKey).first()
-        if (budgets.isEmpty()) return 0
+        // The overall cap lives in the allowance, so a month whose only limit came from
+        // the 明细页 card has no budget row at all -- reading budgets alone would have
+        // silently skipped the alert for it.
+        val allowance = repository.observeAllowance(periodKey).first()
+        val totalLimitCents = allowance?.amountCents
+            ?: budgets.firstOrNull { it.categoryId == 0L }?.amountCents
+            ?: 0L
+        val categoryBudgets = budgets.filter { it.categoryId != 0L }
+        if (totalLimitCents <= 0L && categoryBudgets.isEmpty()) return 0
 
         val totals = repository.observeTotals(periodKey).first()
         val mainTotals = repository.observeMainCategoryTotals(periodKey).first()
@@ -41,16 +49,29 @@ class BudgetAlertChecker(
         val mainSpent = mainTotals.associate { it.mainCategoryId to it.totalCents }
         val leafSpent = categoryTotals.associate { it.categoryId to it.totalCents }
 
-        val progress = budgets.map { budget ->
-            BudgetProgress(
-                categoryId = budget.categoryId,
-                name = budget.categoryName ?: "总预算",
-                limitCents = budget.amountCents,
-                spentCents = when (budget.categoryId) {
-                    0L -> totals.expenseCents
-                    else -> leafSpent[budget.categoryId] ?: mainSpent[budget.categoryId] ?: 0L
-                },
-            )
+        val progress = buildList {
+            if (totalLimitCents > 0L) {
+                add(
+                    BudgetProgress(
+                        categoryId = 0L,
+                        name = "总预算",
+                        limitCents = totalLimitCents,
+                        spentCents = totals.expenseCents,
+                    )
+                )
+            }
+            categoryBudgets.forEach { budget ->
+                add(
+                    BudgetProgress(
+                        categoryId = budget.categoryId,
+                        name = budget.categoryName ?: "分类预算",
+                        limitCents = budget.amountCents,
+                        spentCents = leafSpent[budget.categoryId]
+                            ?: mainSpent[budget.categoryId]
+                            ?: 0L,
+                    )
+                )
+            }
         }
 
         val alreadyFired = preferences.firedAlerts()

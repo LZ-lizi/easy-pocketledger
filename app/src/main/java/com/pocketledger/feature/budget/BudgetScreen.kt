@@ -271,7 +271,7 @@ private fun TotalBudgetCard(row: BudgetRow, onClick: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = when {
-                    !row.isSet -> "点这里设一个月度上限"
+                    !row.isSet -> "点这里设一个月度上限（与明细页生活费同步）"
                     progress.isOver -> "已超 " + Money.formatWithSymbol(-progress.remainingCents)
                     else -> "还剩 " + Money.formatWithSymbol(progress.remainingCents)
                 },
@@ -382,7 +382,7 @@ private fun BudgetEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("${row.name} 预算") },
+        title = { Text(if (row.categoryId == 0L) "本月总预算" else "${row.name} 预算") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -420,7 +420,12 @@ private fun BudgetEditorDialog(
                     }
                 }
                 Text(
-                    text = "留空或填 0 表示取消这个预算。",
+                    text = if (row.categoryId == 0L) {
+                        "留空或填 0 表示取消。这个数字和明细页生活费卡片上的额度是同一个，" +
+                            "在任意一边改都会同步。"
+                    } else {
+                        "留空或填 0 表示取消这个预算。"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

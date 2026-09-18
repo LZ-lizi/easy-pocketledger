@@ -11,6 +11,7 @@ import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.ImportBatchEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.data.entity.TxnSource
+import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.entity.TimeMode
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.domain.CategoryMatcher
@@ -50,7 +51,9 @@ data class ImportRowView(
      */
     val alreadyImported: Boolean,
     val include: Boolean,
-)
+) {
+    val isIncome: Boolean get() = row.type == TxnType.INCOME
+}
 
 data class ImportBatchView(
     val batch: ImportBatchEntity,
@@ -70,12 +73,27 @@ data class ImportUiState(
     val batches: List<ImportBatchView> = emptyList(),
     val busy: Boolean = false,
     val message: String? = null,
+    /**
+     * Keyword rules learned from earlier imports, kept for the length of one review.
+     *
+     * Needed when a row's direction is flipped: the categories of the other kind have to
+     * be matched again, and doing it with the same rules the first pass used is what
+     * keeps a flipped 生活费 row filed as income instead of falling back to 未分类.
+     */
+    val importRules: Map<String, Long> = emptyMap(),
 ) {
     val duplicateCount: Int get() = rows.count { it.alreadyImported }
+
+    /** Rows whose direction had to be inferred rather than read from the file. */
+    val inferredCount: Int get() = rows.count { it.row.typeInferred }
 
     val selected: List<ImportRowView> get() = rows.filter { it.include }
 
     val selectedTotalCents: Long get() = selected.sumOf { it.row.amountCents }
+
+    val selectedIncomeCount: Int get() = selected.count { it.isIncome }
+
+    val selectedExpenseCount: Int get() = selected.count { !it.isIncome }
 
     val canImport: Boolean get() = !busy && accountId != null && selected.isNotEmpty()
 
@@ -128,7 +146,9 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
     fun onFilePicked(fileName: String, bytes: ByteArray) {
         _uiState.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
-            val preview = withContext(Dispatchers.Default) { CsvImport.parse(CsvImport.decode(bytes)) }
+            // One entry point for both shapes: the importer decides from the bytes, so
+            // the picker cannot hand it something it mishandles.
+            val preview = withContext(Dispatchers.Default) { CsvImport.parseFile(fileName, bytes) }
             val existing = repository.existingDedupeHashes()
             val rules = repository.importRules()
             val categories = repository.categoriesSnapshot()
@@ -160,8 +180,9 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
                     accountId = state.accountId ?: accounts.firstOrNull()?.id,
                     skippedCount = preview.skippedCount,
                     skippedReasons = preview.skippedReasons,
+                    importRules = rules,
                     message = if (preview.isEmpty) {
-                        "没有读到可导入的记录，确认这是微信或支付宝导出的账单 CSV。"
+                        "没有读到可导入的记录，确认这是微信或支付宝导出的账单（CSV 或 xlsx）。"
                     } else {
                         null
                     },
@@ -208,6 +229,49 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
         }
     }
 
+    /**
+     * Flips one row between 支出 and 收入.
+     *
+     * The category is matched again rather than cleared: the two kinds have separate
+     * category sets, so the old one cannot survive, but the new one can usually be
+     * guessed -- 生活费 is still 生活费 on the other side of a wrong inference.
+     */
+    fun flipRowType(index: Int) {
+        _uiState.update { state ->
+            state.copy(
+                rows = state.rows.mapIndexed { i, view ->
+                    if (i != index) view else view.copyWith(state, view.row.flipped())
+                }
+            )
+        }
+    }
+
+    /**
+     * Sets every row's direction at once.
+     *
+     * Offered only when some direction was inferred: a bank statement that uses the
+     * opposite sign convention would otherwise need one tap per row.
+     */
+    fun setAllTypes(income: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                rows = state.rows.map { view ->
+                    if (view.isIncome == income) view else view.copyWith(state, view.row.flipped())
+                }
+            )
+        }
+    }
+
+    /** Replaces a view's direction and re-matches a category for the new kind. */
+    private fun ImportRowView.copyWith(state: ImportUiState, row: ImportRow): ImportRowView {
+        val categoryId = CategoryMatcher.match(row, state.categories, state.importRules)
+        return copy(
+            row = row,
+            categoryId = categoryId,
+            categoryName = state.categories.firstOrNull { it.id == categoryId }?.name,
+        )
+    }
+
     fun setAccount(id: Long) {
         _uiState.update { it.copy(accountId = id) }
     }
@@ -226,6 +290,7 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
                 rows = emptyList(),
                 skippedCount = 0,
                 skippedReasons = emptyList(),
+                importRules = emptyMap(),
                 message = null,
             )
         }
@@ -279,6 +344,7 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
                     rows = emptyList(),
                     skippedCount = 0,
                     skippedReasons = emptyList(),
+                    importRules = emptyMap(),
                     message = "已导入 ${selected.size} 条记录，可在下方撤销。",
                 )
             }
@@ -293,8 +359,7 @@ class ImportViewModel(private val repository: LedgerRepository) : ViewModel() {
         }
     }
 
-    private fun ImportRowView.toEntity(accountId: Long, source: TxnSource): TxnEntity {
-        val time = row.time
+    private fun ImportRowView.toEntity(accountId: Long, source: TxnSource): TxnEntity {        val time = row.time
         return TxnEntity(
             type = row.type,
             amountCents = row.amountCents,

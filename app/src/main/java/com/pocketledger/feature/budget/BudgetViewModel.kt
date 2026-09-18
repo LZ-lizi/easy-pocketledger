@@ -14,6 +14,7 @@ import com.pocketledger.domain.BudgetProgress
 import com.pocketledger.domain.DateKeys
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -99,64 +100,80 @@ class BudgetViewModel(
         initialValue = BudgetUiState(),
     )
 
-    private fun monthStream(key: String) = combine(
-        repository.observeBudgetsFor(ledgerId, key),
-        repository.observeTotalsFor(ledgerId, DateKeys.monthRange(key).first, DateKeys.monthRange(key).second),
-        repository.observeMainCategoryTotalsFor(
-            ledgerId,
-            DateKeys.monthRange(key).first,
-            DateKeys.monthRange(key).second,
-        ),
-        repository.observeCategoryTotalsFor(
-            ledgerId,
-            DateKeys.monthRange(key).first,
-            DateKeys.monthRange(key).second,
-        ),
-        repository.observeCategoriesFor(ledgerId, CategoryKind.EXPENSE),
-    ) { budgets, totals, mainTotals, categoryTotals, categories ->
-        val limitByCategory = budgets.associate { it.categoryId to it.amountCents }
-        val mainSpent = mainTotals.associate { it.mainCategoryId to it.totalCents }
-        val leafSpent = categoryTotals.associate { it.categoryId to it.totalCents }
-        val roots = categories.filter { it.parentId == null }.sortedBy { it.sortOrder }
+    /**
+     * Everything one month of one ledger needs, in one emission.
+     *
+     * `combine` tops out at five flows, so the two cap sources and the three spending
+     * aggregates are zipped into a pair and a triple first. That also keeps the body
+     * below honest: limits and spending come from different tables and are only
+     * meaningful together.
+     */
+    private fun monthStream(key: String): Flow<BudgetUiState> {
+        val (start, end) = DateKeys.monthRange(key)
+        val limits = combine(
+            repository.observeBudgetsFor(ledgerId, key),
+            repository.observeAllowanceFor(ledgerId, key),
+        ) { budgets, allowance -> budgets to allowance }
+        val spending = combine(
+            repository.observeTotalsFor(ledgerId, start, end),
+            repository.observeMainCategoryTotalsFor(ledgerId, start, end),
+            repository.observeCategoryTotalsFor(ledgerId, start, end),
+        ) { totals, mainTotals, categoryTotals -> Triple(totals, mainTotals, categoryTotals) }
 
-        BudgetUiState(
-            monthKey = key,
-            monthLabel = DateKeys.monthLabel(key),
-            total = BudgetRow(
-                categoryId = 0L,
-                name = "总预算",
-                iconKey = "wallet",
-                colorArgb = 0xFF2F6BFF.toInt(),
-                limitCents = limitByCategory[0L] ?: 0L,
-                spentCents = totals.expenseCents,
-            ),
-            mainRows = roots.map { root ->
-                BudgetRow(
-                    categoryId = root.id,
-                    name = root.name,
-                    iconKey = root.iconKey,
-                    colorArgb = root.colorArgb,
-                    limitCents = limitByCategory[root.id] ?: 0L,
-                    spentCents = mainSpent[root.id] ?: 0L,
-                )
-            },
-            leafRows = budgets
-                .filter { it.categoryId != 0L }
-                .mapNotNull { budget ->
-                    categories.firstOrNull { it.id == budget.categoryId }?.let { category ->
-                        BudgetRow(
-                            categoryId = category.id,
-                            name = category.name,
-                            iconKey = category.iconKey,
-                            colorArgb = category.colorArgb,
-                            limitCents = budget.amountCents,
-                            spentCents = leafSpent[category.id] ?: 0L,
-                        )
+        return combine(
+            limits,
+            spending,
+            repository.observeCategoriesFor(ledgerId, CategoryKind.EXPENSE),
+        ) { (budgets, allowance), (totals, mainTotals, categoryTotals), categories ->
+            val limitByCategory = budgets.associate { it.categoryId to it.amountCents }
+            val mainSpent = mainTotals.associate { it.mainCategoryId to it.totalCents }
+            val leafSpent = categoryTotals.associate { it.categoryId to it.totalCents }
+            val roots = categories.filter { it.parentId == null }.sortedBy { it.sortOrder }
+
+            BudgetUiState(
+                monthKey = key,
+                monthLabel = DateKeys.monthLabel(key),
+                total = BudgetRow(
+                    categoryId = 0L,
+                    name = "本月总预算",
+                    iconKey = "wallet",
+                    colorArgb = 0xFF2F6BFF.toInt(),
+                    // The overall cap is the allowance, not a budget row: the home card
+                    // and this screen must never disagree about the same month's number,
+                    // and two stores for one figure is how that happens.
+                    limitCents = allowance?.amountCents
+                        ?: limitByCategory[0L]
+                        ?: 0L,
+                    spentCents = totals.expenseCents,
+                ),
+                mainRows = roots.map { root ->
+                    BudgetRow(
+                        categoryId = root.id,
+                        name = root.name,
+                        iconKey = root.iconKey,
+                        colorArgb = root.colorArgb,
+                        limitCents = limitByCategory[root.id] ?: 0L,
+                        spentCents = mainSpent[root.id] ?: 0L,
+                    )
+                },
+                leafRows = budgets
+                    .filter { it.categoryId != 0L }
+                    .mapNotNull { budget ->
+                        categories.firstOrNull { it.id == budget.categoryId }?.let { category ->
+                            BudgetRow(
+                                categoryId = category.id,
+                                name = category.name,
+                                iconKey = category.iconKey,
+                                colorArgb = category.colorArgb,
+                                limitCents = budget.amountCents,
+                                spentCents = leafSpent[category.id] ?: 0L,
+                            )
+                        }
                     }
-                }
-                .sortedByDescending { it.spentCents },
-            leafOptions = categories.filter { it.parentId != null }.sortedBy { it.sortOrder },
-        )
+                    .sortedByDescending { it.spentCents },
+                leafOptions = categories.filter { it.parentId != null }.sortedBy { it.sortOrder },
+            )
+        }
     }
 
     fun previousMonth() {
@@ -192,7 +209,13 @@ class BudgetViewModel(
     fun save(categoryId: Long, amountCents: Long) {
         val key = monthKey.value
         viewModelScope.launch {
-            repository.setBudgetFor(ledgerId, key, categoryId, amountCents)
+            // The overall cap is the allowance, so it is written there -- the same
+            // record the 明细页 card edits. Category caps stay in the budget table.
+            if (categoryId == 0L) {
+                repository.setAllowanceFor(ledgerId, key, amountCents)
+            } else {
+                repository.setBudgetFor(ledgerId, key, categoryId, amountCents)
+            }
             editor.value = null
         }
     }

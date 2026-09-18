@@ -213,7 +213,7 @@ private fun FieldsCard(state: DetailUiState) {
             } else {
                 DetailRow("分类", state.categoryName.orEmpty())
                 DetailRow("账户", state.accountName)
-                state.merchant?.takeIf { it.isNotBlank() }?.let { DetailRow("商家", it) }
+                state.merchant?.takeIf { it.isNotBlank() }?.let { DetailRow("交易对象", it) }
             }
             state.note?.takeIf { it.isNotBlank() }?.let { DetailRow("备注", it) }
         }

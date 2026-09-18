@@ -460,6 +460,34 @@ class LedgerRepository(
         currentLedgerId.value?.let { allowanceDao.deletePeriod(it, monthKey) }
     }
 
+    /**
+     * The allowance in force for one month of one *named* ledger.
+     *
+     * The overall monthly cap lives here and nowhere else: it is the same number the
+     * home card shows as 生活费, so the ledger-management page reads and writes it
+     * through this pair rather than keeping a second copy in the budget table.
+     */
+    fun observeAllowanceFor(ledgerId: Long, monthKey: String): Flow<AllowanceEntity?> =
+        allowanceDao.observeEffectiveFor(ledgerId, monthKey)
+
+    /**
+     * Sets one month's overall cap for a named ledger.
+     *
+     * A zero is **stored**, not deleted, matching what the 明细页 card does. The
+     * allowance rolls forward from the most recent earlier month, so deleting this
+     * month's row would simply resurrect last month's figure; an explicit zero is the
+     * only way "no budget this month" can be said.
+     */
+    suspend fun setAllowanceFor(ledgerId: Long, monthKey: String, amountCents: Long) {
+        allowanceDao.upsert(
+            AllowanceEntity(
+                ledgerId = ledgerId,
+                periodKey = monthKey,
+                amountCents = amountCents,
+            )
+        )
+    }
+
     // -------------------------------------------------------------------- budgets
 
     /**

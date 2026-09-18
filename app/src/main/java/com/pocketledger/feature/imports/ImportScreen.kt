@@ -168,11 +168,22 @@ fun ImportScreen(
                     }
                 }
 
+                if (state.inferredCount > 0) {
+                    item(key = "inferred") {
+                        InferredNotice(
+                            count = state.inferredCount,
+                            onAllExpense = { viewModel.setAllTypes(income = false) },
+                            onAllIncome = { viewModel.setAllTypes(income = true) },
+                        )
+                    }
+                }
+
                 items(state.rows.size, key = { state.rows[it].row.lineNumber }) { index ->
                     ImportRowCard(
                         view = state.rows[index],
                         categories = state.categories,
                         onToggle = { viewModel.toggleRow(index) },
+                        onFlipType = { viewModel.flipRowType(index) },
                         onPickCategory = { id -> viewModel.setRowCategory(index, id) },
                     )
                 }
@@ -182,7 +193,8 @@ fun ImportScreen(
                         label = if (state.busy) {
                             "导入中…"
                         } else {
-                            "导入 ${state.selected.size} 条 · ${Money.formatWithSymbol(state.selectedTotalCents)}"
+                            "导入 ${state.selected.size} 条 · " +
+                                "支出 ${state.selectedExpenseCount} / 收入 ${state.selectedIncomeCount}"
                         },
                         enabled = state.canImport,
                         onClick = viewModel::commitImport,
@@ -231,13 +243,13 @@ private fun IntroCard() {
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = "支持微信、支付宝导出的账单，以及本应用导出的 CSV。",
+                text = "支持微信、支付宝导出的账单（CSV 或 xlsx），以及本应用导出的 CSV。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "导入前会先列出每一条让你确认，重复的记录会自动勾掉；" +
-                    "导入后可以整批撤销，也可以再导入一次更新的账单补齐新记录。",
+                text = "导入前会先列出每一条让你确认：收入/支出、分类、金额都能当场改，" +
+                    "重复的记录会自动勾掉；导入后可以整批撤销，也可以再导入一次更新的账单补齐新记录。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -333,15 +345,51 @@ private fun AccountPicker(
     }
 }
 
+/**
+ * Shown when the file gave no 收/支 column.
+ *
+ * Saying so up front, with a one-tap fix for the whole file, is what keeps an inferred
+ * direction from becoming a silently wrong month.
+ */
+@Composable
+private fun InferredNotice(count: Int, onAllExpense: () -> Unit, onAllIncome: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "这个文件没有「收/支」列，$count 条的收支方向是推测出来的。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "点每条右侧的「支出/收入」可以单独改；如果整体反了，用下面的按钮一次改完。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onAllExpense) { Text("全部改为支出") }
+                TextButton(onClick = onAllIncome) { Text("全部改为收入") }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ImportRowCard(
     view: ImportRowView,
     categories: List<CategoryEntity>,
     onToggle: () -> Unit,
+    onFlipType: () -> Unit,
     onPickCategory: (Long?) -> Unit,
 ) {
     val row = view.row
-    val isIncome = row.type == TxnType.INCOME
+    val isIncome = view.isIncome
 
     Card(
         modifier = Modifier
@@ -391,6 +439,13 @@ private fun ImportRowCard(
                     style = MoneyTextStyles.Small,
                     color = if (isIncome) LedgerTheme.colors.income else LedgerTheme.colors.expense,
                 )
+                // The direction is a control, not a decoration: the row shows the value
+                // that will actually be stored, and one tap fixes a wrong one.
+                TypeChip(
+                    isIncome = isIncome,
+                    inferred = row.typeInferred,
+                    onClick = onFlipType,
+                )
                 CategoryDropTarget(
                     name = view.categoryName ?: "未分类",
                     categories = categories.filter { category ->
@@ -401,6 +456,27 @@ private fun ImportRowCard(
             }
         }
     }
+}
+
+/** 支出 / 收入, tappable to flip; marked when the direction was only inferred. */
+@Composable
+private fun TypeChip(isIncome: Boolean, inferred: Boolean, onClick: () -> Unit) {
+    val accent = if (isIncome) LedgerTheme.colors.income else LedgerTheme.colors.expense
+    Text(
+        text = buildString {
+            append(if (isIncome) "收入" else "支出")
+            append(" ⇄")
+            if (inferred) append(" ?")
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = accent,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(accent.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 /**
