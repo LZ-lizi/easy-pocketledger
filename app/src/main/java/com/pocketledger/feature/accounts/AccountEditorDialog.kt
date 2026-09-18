@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,27 +55,39 @@ private val ACCOUNT_TYPES = listOf(
 /**
  * Create or edit one account.
  *
- * Initial balance is only editable as a starting figure, not as the live balance:
- * the live balance is always derived from transactions, so letting someone type
- * over it here would silently desynchronise the two.
+ * The 余额 field shows the **live** balance and writes back to it directly, which is
+ * why this needs [currentBalanceCents] rather than reading the account alone. Typing a
+ * new figure re-anchors the account at that number: earlier transactions stop
+ * counting toward the balance, and everything recorded afterwards builds on the new
+ * figure. That makes correcting a wrong balance a one-step edit instead of a hunt
+ * through months of history.
+ *
+ * Editing anything else leaves the anchor untouched, so renaming an account cannot
+ * silently discard the transactions that produced its balance.
+ *
+ * Deletion is soft: [onDelete] hides the account while its transactions stay in the
+ * ledger, so a mistaken delete never tears a hole in past statistics.
  */
 @Composable
 fun AccountEditorDialog(
     existing: AccountEntity?,
+    currentBalanceCents: Long?,
     onDismiss: () -> Unit,
     onSave: (AccountEntity) -> Unit,
-    onArchive: ((AccountEntity) -> Unit)? = null,
+    onDelete: ((AccountEntity) -> Unit)? = null,
 ) {
+    // A new account starts from nothing; an existing one starts from the balance the
+    // user can actually see on the accounts screen, falling back to the stored
+    // opening figure if balances have not loaded yet.
+    val shownBalance = existing?.let { currentBalanceCents ?: it.initialBalanceCents } ?: 0L
+
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var type by remember { mutableStateOf(existing?.type ?: AccountType.CASH) }
-    var initialBalance by remember {
-        mutableStateOf(
-            existing?.initialBalanceCents
-                ?.takeIf { it != 0L }
-                ?.let { Money.formatCompact(it) }
-                .orEmpty()
-        )
-    }
+    var balanceText by remember { mutableStateOf(Money.formatCompact(shownBalance)) }
+    // Only a deliberate edit may move the anchor. Compared against the prefill rather
+    // than tracked by a focus flag, so typing a figure and undoing it is a no-op.
+    var balanceEdited by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     var creditLimit by remember {
         mutableStateOf(
             existing?.creditLimitCents?.let { Money.formatCompact(it) }.orEmpty()
@@ -87,9 +101,9 @@ fun AccountEditorDialog(
     }
 
     val isCreditCard = type == AccountType.CREDIT_CARD
-    val parsedInitial = if (initialBalance.isBlank()) 0L else Money.parseYuanToCents(initialBalance)
-    val initialValid = initialBalance.isBlank() || parsedInitial != null
-    val canSave = name.isNotBlank() && initialValid
+    val parsedBalance = if (balanceText.isBlank()) 0L else Money.parseYuanToCents(balanceText)
+    val balanceValid = balanceText.isBlank() || parsedBalance != null
+    val canSave = name.isNotBlank() && balanceValid
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -128,24 +142,33 @@ fun AccountEditorDialog(
                 }
 
                 OutlinedTextField(
-                    value = initialBalance,
-                    onValueChange = { initialBalance = it },
+                    value = balanceText,
+                    onValueChange = {
+                        balanceText = it
+                        balanceEdited = it != Money.formatCompact(shownBalance)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     prefix = { Text("¥") },
-                    label = { Text("初始余额") },
+                    label = { Text("余额") },
                     supportingText = {
                         Text(
-                            text = "当前余额由流水自动算出，这里只是起始金额。",
+                            text = if (existing == null) {
+                                "记账从这里开始累加。"
+                            } else {
+                                "改了就按新余额继续记账，之前的流水不会变。"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                         )
                     },
-                    isError = !initialValid,
+                    isError = !balanceValid,
                 )
 
                 QuickAmountRow { delta ->
-                    val current = Money.parseYuanToCents(initialBalance) ?: 0L
-                    initialBalance = Money.formatCompact(current + delta)
+                    val current = Money.parseYuanToCents(balanceText) ?: 0L
+                    val next = Money.formatCompact(current + delta)
+                    balanceText = next
+                    balanceEdited = next != Money.formatCompact(shownBalance)
                 }
 
                 if (isCreditCard) {
@@ -221,11 +244,12 @@ fun AccountEditorDialog(
                     Switch(checked = includeInTotal, onCheckedChange = { includeInTotal = it })
                 }
 
-                if (existing != null && onArchive != null) {
-                    TextButton(onClick = { onArchive(existing) }) {
+                if (existing != null && onDelete != null) {
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = { confirmDelete = true }) {
                         Text(
-                            text = if (existing.isArchived) "取消归档" else "归档这个账户",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = "删除这个账户",
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -235,6 +259,10 @@ fun AccountEditorDialog(
             TextButton(
                 enabled = canSave,
                 onClick = {
+                    val parsed = parsedBalance ?: 0L
+                    // The anchor only moves on a deliberate balance edit; for a new
+                    // account it must stay 0 so a back-dated first entry still counts.
+                    val reanchor = existing != null && balanceEdited
                     onSave(
                         AccountEntity(
                             id = existing?.id ?: 0L,
@@ -242,7 +270,16 @@ fun AccountEditorDialog(
                             type = type,
                             iconKey = existing?.iconKey ?: "wallet",
                             colorArgb = colorArgb,
-                            initialBalanceCents = parsedInitial ?: 0L,
+                            initialBalanceCents = if (existing == null || balanceEdited) {
+                                parsed
+                            } else {
+                                existing.initialBalanceCents
+                            },
+                            balanceAsOfMillis = if (reanchor) {
+                                System.currentTimeMillis()
+                            } else {
+                                existing?.balanceAsOfMillis ?: 0L
+                            },
                             creditLimitCents = creditLimit.takeIf { it.isNotBlank() }
                                 ?.let { Money.parseYuanToCents(it) },
                             billDay = billDay.toIntOrNull()?.takeIf { it in 1..31 },
@@ -250,6 +287,7 @@ fun AccountEditorDialog(
                             includeInTotal = includeInTotal,
                             sortOrder = existing?.sortOrder ?: 0,
                             isArchived = existing?.isArchived ?: false,
+                            isHidden = existing?.isHidden ?: false,
                             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                         )
                     )
@@ -260,15 +298,39 @@ fun AccountEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+
+    val target = existing
+    if (confirmDelete && target != null && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("删除账户") },
+            text = {
+                Text("「${target.name}」会从账户列表移除，已有的流水仍然保留，删除后无法在列表里找回。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete(target)
+                    },
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+            },
+        )
+    }
 }
 
 /**
- * Quick nudges to the opening balance.
+ * Quick nudges to the balance.
  *
- * These edit the account's starting figure and nothing else. They deliberately do
- * not write an income row: filling in a card you already have money on must not
- * inflate this month's income, which is exactly what would happen if this were
- * wired to the ledger instead of to the field.
+ * These move the anchor and nothing else. They deliberately do not write an income
+ * row: filling in the money already on a card must not inflate this month's income,
+ * which is exactly what would happen if this were wired to the ledger instead of to
+ * the field.
  */
 @Composable
 private fun QuickAmountRow(onAdd: (Long) -> Unit) {

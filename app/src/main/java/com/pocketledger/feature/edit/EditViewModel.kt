@@ -11,6 +11,7 @@ import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.data.entity.TxnType
+import com.pocketledger.data.entity.TimeMode
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.KeypadInput
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 
 data class EditUiState(
     val loaded: Boolean = false,
@@ -38,9 +40,41 @@ data class EditUiState(
     val merchant: String = "",
     val note: String = "",
     val dateKey: String = DateKeys.dateKey(LocalDate.now()),
+    /**
+     * Wall-clock time, or null while the entry keeps whatever it already had.
+     *
+     * Null is the meaningful default: an edit that only renames a category must not
+     * silently restamp when the entry happened.
+     */
+    val time: LocalTime? = null,
+    /** The stored timestamp, kept so an untouched time survives the edit. */
+    val storedMillis: Long = 0L,
+    /** Date the entry was stored with, to tell a real move from a re-save. */
+    val storedDateKey: String = "",
+    /** The stored [TimeMode], preserved when neither date nor time is touched. */
+    val storedTimeMode: TimeMode = TimeMode.AUTO,
     val isExcludedFromStats: Boolean = false,
 ) {
     val isTransfer: Boolean get() = type == TxnType.TRANSFER
+
+    /**
+     * What the detail view should show for the clock after this edit.
+     *
+     * Choosing a time is an explicit statement; moving only the day leaves the stored
+     * clock reading as a leftover that the detail view hides; touching neither keeps
+     * the entry's existing behaviour.
+     */
+    val timeMode: TimeMode
+        get() = when {
+            time != null -> TimeMode.EXPLICIT
+            dateKey != storedDateKey -> TimeMode.HIDDEN
+            else -> storedTimeMode
+        }
+
+    /** The exact timestamp to store. */
+    val happenedAtMillis: Long
+        get() = time?.let { DateKeys.atTime(dateKey, it) }
+            ?: DateKeys.withTimeOfDay(dateKey, storedMillis)
 
     val kind: CategoryKind
         get() = if (type == TxnType.INCOME) CategoryKind.INCOME else CategoryKind.EXPENSE
@@ -126,6 +160,9 @@ class EditViewModel(
                     merchant = txn.merchant.orEmpty(),
                     note = txn.note.orEmpty(),
                     dateKey = txn.localDateKey,
+                    storedMillis = txn.happenedAt,
+                    storedDateKey = txn.localDateKey,
+                    storedTimeMode = txn.timeMode,
                     isExcludedFromStats = txn.isExcludedFromStats,
                 )
             }
@@ -188,17 +225,21 @@ class EditViewModel(
         _uiState.update { it.copy(isExcludedFromStats = excluded) }
     }
 
-    /** Step the date by whole days; a stepper suits a ledger better than a calendar. */
-    fun shiftDate(days: Long) {
-        _uiState.update { state ->
-            val next = runCatching { LocalDate.parse(state.dateKey).plusDays(days) }
-                .getOrElse { LocalDate.now() }
-            state.copy(dateKey = next.toString())
+    /** Moves the calendar day, leaving the clock reading as it was. */
+    fun setDate(dateKey: String) {
+        _uiState.update { it.copy(dateKey = dateKey) }
+    }
+
+    /** Records a clock time the user chose, which the detail view then shows plainly. */
+    fun setTime(hour: Int, minute: Int) {
+        _uiState.update {
+            it.copy(time = LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)))
         }
     }
 
-    fun setToday() {
-        _uiState.update { it.copy(dateKey = DateKeys.dateKey(LocalDate.now())) }
+    /** Drops back to the entry's stored time. */
+    fun clearTime() {
+        _uiState.update { it.copy(time = null) }
     }
 
     // ---------------------------------------------------------------- persistence
@@ -222,8 +263,8 @@ class EditViewModel(
                     merchant = if (state.isTransfer) null else state.merchant.trim().ifBlank { null },
                     note = state.note.trim().ifBlank { null },
                     localDateKey = state.dateKey,
-                    // Keep the original wall-clock time; only the calendar day moved.
-                    happenedAt = DateKeys.withTimeOfDay(state.dateKey, original.happenedAt),
+                    happenedAt = state.happenedAtMillis,
+                    timeMode = state.timeMode,
                     isExcludedFromStats = if (state.isTransfer) false else state.isExcludedFromStats,
                 )
             )

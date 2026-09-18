@@ -9,6 +9,7 @@ import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.CategoryTotal
 import com.pocketledger.data.dao.DayTotal
 import com.pocketledger.data.dao.InstallmentDao
+import com.pocketledger.data.dao.ImportDao
 import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
@@ -25,6 +26,8 @@ import com.pocketledger.data.entity.BudgetPeriodType
 import com.pocketledger.data.entity.BudgetScope
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.data.entity.ImportBatchEntity
+import com.pocketledger.data.entity.ImportRuleEntity
 import com.pocketledger.data.entity.InstallmentPeriodEntity
 import com.pocketledger.data.entity.InstallmentPlanEntity
 import com.pocketledger.data.entity.LedgerEntity
@@ -90,6 +93,7 @@ class LedgerRepository(
     private val tagDao: TagDao,
     private val termDao: TermDao,
     private val installmentDao: InstallmentDao,
+    private val importDao: ImportDao,
 ) {
 
     private val currentLedgerId = MutableStateFlow<Long?>(null)
@@ -179,6 +183,15 @@ class LedgerRepository(
 
     fun observeBalances(): Flow<List<AccountBalance>> = scoped { accountDao.observeBalances(it) }
 
+    /**
+     * The selected ledger's hidden accounts.
+     *
+     * Feeds the entry keypad's fallback account: in a 累计模式 ledger nothing is
+     * selectable, and without this the keypad would have no account to attach an entry
+     * to and would refuse to save.
+     */
+    fun observeHiddenAccounts(): Flow<List<AccountEntity>> = scoped { accountDao.observeHidden(it) }
+
     suspend fun account(id: Long): AccountEntity? = accountDao.byId(id)
 
     suspend fun accountsSnapshot(): List<AccountEntity> =
@@ -194,11 +207,11 @@ class LedgerRepository(
     }
 
     /**
-     * Archiving hides an account from pickers without touching its history, which
-     * is the right move for a card you stopped using but still want reports for.
+     * Removes an account from every picker and list.
+     *
+     * Soft, not hard: the transactions that referenced it stay in the ledger, so
+     * deleting an account never rewrites past months of statistics.
      */
-    suspend fun setAccountArchived(id: Long, archived: Boolean) = accountDao.setArchived(id, archived)
-
     suspend fun deleteAccount(id: Long) = accountDao.softDelete(id)
 
     // ---------------------------------------------------------------- categories
@@ -368,6 +381,58 @@ class LedgerRepository(
         currentLedgerId.value?.let { txnDao.generatedPlanKeys(it).toSet() } ?: emptySet()
 
     suspend fun deleteImportBatch(batchId: Long) = txnDao.softDeleteBatch(batchId)
+
+    // ---------------------------------------------------------------------- import
+
+    fun observeImportBatches(): Flow<List<ImportBatchEntity>> =
+        scoped { importDao.observeBatches(it) }
+
+    /**
+     * Keywords the user has already filed, as `keyword -> categoryId`.
+     *
+     * Read once per import rather than observed: the matcher runs over a whole file at
+     * a time, and a mid-import change to the rules would make the preview disagree
+     * with itself.
+     */
+    suspend fun importRules(): Map<String, Long> {
+        val ledgerId = currentLedgerId.value ?: return emptyMap()
+        return importDao.rules(ledgerId)
+            .mapNotNull { rule -> rule.categoryId?.let { rule.keyword to it } }
+            .toMap()
+    }
+
+    /** Records one import so it can be shown and undone as a unit. */
+    suspend fun addImportBatch(batch: ImportBatchEntity): Long =
+        importDao.insertBatch(batch.copy(ledgerId = writeLedgerId()))
+
+    /** Writes imported rows in one call, stamped with their batch and ledger. */
+    suspend fun addImportedTransactions(batchId: Long, txns: List<TxnEntity>): List<Long> {
+        val ledgerId = writeLedgerId()
+        return txnDao.insertAll(txns.map { it.copy(ledgerId = ledgerId, importBatchId = batchId) })
+    }
+
+    /** Remembers the category decisions made during an import. */
+    suspend fun rememberImportRules(keywordToCategory: Map<String, Long>) {
+        if (keywordToCategory.isEmpty()) return
+        val ledgerId = writeLedgerId()
+        importDao.upsertRules(
+            keywordToCategory.map { (keyword, categoryId) ->
+                ImportRuleEntity(ledgerId = ledgerId, keyword = keyword, categoryId = categoryId)
+            }
+        )
+    }
+
+    /**
+     * Undoes one import.
+     *
+     * The transactions are soft-deleted, so a mistaken undo is recoverable, but the
+     * batch record is removed outright -- a batch that still listed rows no longer in
+     * the ledger would be a lie about what happened.
+     */
+    suspend fun undoImport(batchId: Long) {
+        txnDao.softDeleteBatch(batchId)
+        importDao.deleteBatch(batchId)
+    }
 
     // ----------------------------------------------------------------- allowance
 

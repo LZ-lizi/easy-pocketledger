@@ -1,5 +1,6 @@
 package com.pocketledger.feature.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,9 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -281,10 +284,19 @@ private fun LedgerEditorDialog(
                 }
 
                 if (existing != null) {
-                    TextButton(onClick = { onArchive(existing) }) {
+                    // An outlined button, not a bare text button: archiving is the one
+                    // destructive action in this dialog and it must not read as a label.
+                    OutlinedButton(
+                        onClick = { onArchive(existing) },
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = LedgerTheme.colors.expense,
+                        ),
+                    ) {
                         Text(
                             text = if (existing.isArchived) "取消归档" else "归档这个账本",
-                            color = LedgerTheme.colors.expense,
+                            style = MaterialTheme.typography.labelLarge,
                         )
                     }
                 }

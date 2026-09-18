@@ -48,6 +48,8 @@ import com.pocketledger.feature.edit.EditScreen
 import com.pocketledger.feature.edit.EditViewModel
 import com.pocketledger.feature.export.ExportScreen
 import com.pocketledger.feature.export.ExportViewModel
+import com.pocketledger.feature.imports.ImportScreen
+import com.pocketledger.feature.imports.ImportViewModel
 import com.pocketledger.feature.entry.EntryScreen
 import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
@@ -88,6 +90,7 @@ object Routes {
     const val BUDGET = "budget"
     const val BUDGET_ARG = "ledgerId"
     const val PINNED = "pinned"
+    const val IMPORT = "import"
     const val EXPORT = "export"
     const val ABOUT = "about"
 
@@ -280,6 +283,7 @@ private fun LedgerNavHost(
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenInstallments = { navController.navigate(Routes.INSTALLMENTS) },
                     onOpenPinned = { navController.navigate(Routes.PINNED) },
+                    onOpenImport = { navController.navigate(Routes.IMPORT) },
                     onOpenExport = { navController.navigate(Routes.EXPORT) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
@@ -334,6 +338,15 @@ private fun LedgerNavHost(
                 val viewModel: PinnedCategoriesViewModel =
                     viewModel(factory = PinnedCategoriesViewModel.Factory)
                 PinnedCategoriesScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.IMPORT) {
+                val viewModel: ImportViewModel = viewModel(factory = ImportViewModel.Factory)
+                ImportScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },

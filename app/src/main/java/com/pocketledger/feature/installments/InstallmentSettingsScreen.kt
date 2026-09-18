@@ -1,5 +1,6 @@
 package com.pocketledger.feature.installments
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,9 +23,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,8 +52,10 @@ import com.pocketledger.data.entity.InstallmentPlanEntity
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.InstallmentSchedule
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.CalendarPickerDialog
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
+import com.pocketledger.ui.util.DateLabels
 import java.time.LocalDate
 
 /**
@@ -361,7 +369,7 @@ private fun InstallmentEditorDialog(
                         onValueChange = { repayDayInput = it.filter(Char::isDigit).take(2) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        label = { Text("每月几号") },
+                        label = { Text("还款日") },
                         isError = repayDay == null || repayDay !in 1..31,
                     )
                 }
@@ -391,17 +399,10 @@ private fun InstallmentEditorDialog(
                     )
                 }
 
-                OutlinedTextField(
-                    value = startDateInput,
-                    onValueChange = { startDateInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("起始日期") },
-                    placeholder = { Text("2026-09-01") },
-                    isError = !startValid,
-                    supportingText = {
-                        Text("格式 YYYY-MM-DD", style = MaterialTheme.typography.labelSmall)
-                    },
+                DatePickField(
+                    label = "起始日期",
+                    dateKey = startDateInput,
+                    onPick = { startDateInput = it },
                 )
 
                 if (accounts.isNotEmpty()) {
@@ -428,17 +429,11 @@ private fun InstallmentEditorDialog(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SelectChip("不指定", categoryId == null) { categoryId = null }
-                        categories.forEach { category ->
-                            SelectChip(category.name, categoryId == category.id) {
-                                categoryId = category.id
-                            }
-                        }
-                    }
+                    CategoryPickerField(
+                        categories = categories,
+                        selectedId = categoryId,
+                        onSelect = { categoryId = it },
+                    )
                 }
 
                 if (existing != null) {
@@ -487,6 +482,125 @@ private fun InstallmentEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+}
+
+/**
+ * Category chooser as a dropdown, not a row of chips.
+ *
+ * The chip row lived inside a height-limited scrolling dialog, and its labels were
+ * being cut off. A popup sizes itself to its content and scrolls independently, so a
+ * long category list can never clip a name -- and it stays usable one-handed, which a
+ * horizontally scrolling chip strip is not.
+ */
+@Composable
+private fun CategoryPickerField(
+    categories: List<CategoryEntity>,
+    selectedId: Long?,
+    onSelect: (Long?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = categories.firstOrNull { it.id == selectedId }?.name ?: "不指定"
+
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+        ) {
+            Text(
+                text = selectedLabel,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "▾",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 320.dp),
+        ) {
+            DropdownMenuItem(
+                text = { Text("不指定") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                },
+            )
+            categories.forEach { category ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = category.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (category.id == selectedId) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    },
+                    onClick = {
+                        onSelect(category.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A date that opens a calendar instead of a keyboard.
+ *
+ * `startValid` still guards the saved value, but it can no longer be exercised by
+ * hand: the picker cannot produce a malformed date.
+ */
+@Composable
+private fun DatePickField(label: String, dateKey: String, onPick: (String) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+
+    OutlinedButton(
+        onClick = { picking = true },
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Text(
+            text = "$label　${DateLabels.dayLabel(dateKey)}",
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Start,
+        )
+        Text(
+            text = "▾",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    if (picking) {
+        CalendarPickerDialog(
+            initialDateKey = dateKey,
+            onDismiss = { picking = false },
+            onPick = onPick,
+            title = "选择$label",
+        )
+    }
 }
 
 @Composable

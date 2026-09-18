@@ -8,6 +8,7 @@ import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.data.entity.GoalStatus
 import com.pocketledger.data.entity.InstallmentKind
 import com.pocketledger.data.entity.LedgerType
+import com.pocketledger.data.entity.TimeMode
 import com.pocketledger.data.entity.TxnSource
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.entity.WishStatus
@@ -87,4 +88,10 @@ class Converters {
 
     @TypeConverter
     fun toInstallmentKind(value: String): InstallmentKind = InstallmentKind.valueOf(value)
+
+    @TypeConverter
+    fun fromTimeMode(value: TimeMode): String = value.name
+
+    @TypeConverter
+    fun toTimeMode(value: String): TimeMode = TimeMode.valueOf(value)
 }

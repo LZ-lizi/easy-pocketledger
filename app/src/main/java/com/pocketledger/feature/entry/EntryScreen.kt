@@ -7,15 +7,19 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -24,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,12 +44,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.CalendarPickerDialog
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
+import com.pocketledger.ui.components.WheelTimePickerDialog
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
@@ -122,13 +130,13 @@ fun EntryScreen(
                 CategoryGrid(
                     state = state,
                     onSelect = viewModel::selectCategory,
-                    onToggleExpanded = viewModel::toggleCategoriesExpanded,
                     modifier = Modifier.weight(1f),
                 )
                 AccountPicker(
                     accounts = state.accounts,
                     selectedId = state.selectedAccountId,
                     onSelect = viewModel::selectAccount,
+                    recordsToHiddenAccount = state.accountIsImplicit,
                 )
             }
         }
@@ -165,7 +173,7 @@ fun EntryScreen(
         DateTimeDialog(
             dateKey = state.dateKey,
             time = state.customTime,
-            onShiftDate = viewModel::shiftDate,
+            onPickDate = viewModel::setDate,
             onSetTime = viewModel::setTime,
             onUseNow = viewModel::useCurrentTime,
             onDismiss = { dateTimeDialogVisible = false },
@@ -308,14 +316,21 @@ private fun AmountDisplay(amountInput: String, mode: EntryMode) {
     }
 }
 
-/** The collapsed grid plus its 「更多」 / 「收起」 control. */
+/**
+ * The everyday grid: the most-used categories plus a 「更多」 cell.
+ *
+ * 「更多」 is a grid cell rather than a pill under the grid, because it is one more
+ * choice in the same list, not a different kind of thing. It carries the three-dot
+ * glyph and the same shape as every category around it.
+ */
 @Composable
 private fun CategoryGrid(
     state: EntryUiState,
     onSelect: (Long) -> Unit,
-    onToggleExpanded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var moreOpen by remember { mutableStateOf(false) }
+
     Column(modifier = modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(4),
@@ -333,32 +348,129 @@ private fun CategoryGrid(
                     onClick = { onSelect(category.id) },
                 )
             }
-        }
-
-        if (state.showMoreButton) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .clickable(onClick = onToggleExpanded)
-                        .padding(horizontal = 18.dp, vertical = 6.dp),
-                ) {
-                    Text(
-                        text = if (state.categoriesExpanded) {
-                            "收起"
-                        } else {
-                            "更多 ${state.hiddenCategoryCount}"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+            if (state.categoryGroups.isNotEmpty()) {
+                item(key = "more") {
+                    MoreCell(
+                        label = "更多",
+                        selected = false,
+                        onClick = { moreOpen = true },
                     )
                 }
+            }
+        }
+    }
+
+    if (moreOpen) {
+        CategoryMoreDialog(
+            groups = state.categoryGroups,
+            selectedId = state.selectedCategoryId,
+            onSelect = onSelect,
+            onDismiss = { moreOpen = false },
+        )
+    }
+}
+
+/**
+ * The full category list, floating above the keypad and grouped by 大类.
+ *
+ * A dialog rather than expanding the grid in place: expanding pushed the keypad and the
+ * amount out of view exactly when the user was mid-entry, and it could not say which
+ * 大类 an item belonged to.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryMoreDialog(
+    groups: List<CategoryGroup>,
+    selectedId: Long?,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 440.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "全部分类",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "✕",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    groups.forEach { group ->
+                        item(key = group.key) {
+                            CategoryGroupBlock(
+                                group = group,
+                                selectedId = selectedId,
+                                onSelect = { id ->
+                                    onSelect(id)
+                                    onDismiss()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryGroupBlock(
+    group: CategoryGroup,
+    selectedId: Long?,
+    onSelect: (Long) -> Unit,
+) {
+    val accent = Color(group.colorArgb)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LedgerIconView(
+                icon = LedgerIcon.forKey(group.iconKey),
+                tint = accent,
+                size = 16.dp,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = group.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            group.items.forEach { category ->
+                CategoryChip(
+                    category = category,
+                    selected = category.id == selectedId,
+                    onClick = { onSelect(category.id) },
+                )
             }
         }
     }
@@ -412,7 +524,7 @@ private fun MonthlyPanel(
                 onValueChange = onRepayDayChange,
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                label = { Text("每月几号", style = MaterialTheme.typography.bodySmall) },
+                label = { Text("还款日", style = MaterialTheme.typography.bodySmall) },
                 textStyle = MaterialTheme.typography.bodyMedium,
                 isError = state.planRepayDayValue == null,
             )
@@ -485,75 +597,49 @@ private fun CategoryChip(category: CategoryEntity, selected: Boolean, onClick: (
 }
 
 /**
- * Date and time together.
+ * Date and time for this entry, each opened as its own picker.
  *
- * Steppers rather than a calendar and a clock dial: an entry is nearly always today
- * or yesterday and within an hour of now, so the corrections needed are one or two
- * steps, and a full picker would be more chrome than the job requires.
+ * Every stepper that used to live here is gone. A calendar cannot produce an invalid
+ * date and shows the weekday, which is usually why the date is being changed at all;
+ * a wheel reaches any minute in one gesture, which the ±1 hour and ±5 minute chips
+ * never could. Both pickers float above this dialog, so opening one costs nothing.
  */
 @Composable
 private fun DateTimeDialog(
     dateKey: String,
     time: LocalTime?,
-    onShiftDate: (Long) -> Unit,
+    onPickDate: (String) -> Unit,
     onSetTime: (Int, Int) -> Unit,
     onUseNow: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val shown = time ?: LocalTime.now()
+    var pickingDate by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("记账时间") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "日期",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp),
-                    )
-                    StepChip("‹") { onShiftDate(-1) }
-                    Text(
-                        text = DateLabels.dayLabel(dateKey),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StepChip("›") { onShiftDate(1) }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "时间",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp),
-                    )
-                    StepChip("‹") { onSetTime(shown.hour - 1, shown.minute) }
-                    Text(
-                        text = "%02d : %02d".format(shown.hour, shown.minute),
-                        style = MoneyTextStyles.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StepChip("›") { onSetTime(shown.hour + 1, shown.minute) }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    StepChip("-5 分") { onSetTime(shown.hour, shown.minute - 5) }
-                    Spacer(Modifier.width(10.dp))
-                    StepChip("+5 分") { onSetTime(shown.hour, shown.minute + 5) }
-                }
-
-                TextButton(onClick = { onUseNow(); onDismiss() }) {
-                    Text("用当前时间")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PickerField(
+                    label = "日期",
+                    value = DateLabels.dayLabel(dateKey),
+                    onClick = { pickingDate = true },
+                )
+                PickerField(
+                    label = "时间",
+                    value = if (time == null) {
+                        "当前时间"
+                    } else {
+                        "%02d:%02d".format(shown.hour, shown.minute)
+                    },
+                    // An untouched time reads as a default, not as a decision.
+                    muted = time == null,
+                    onClick = { pickingTime = true },
+                )
+                if (time != null) {
+                    TextButton(onClick = onUseNow) { Text("改回当前时间") }
                 }
             }
         },
@@ -561,22 +647,60 @@ private fun DateTimeDialog(
             TextButton(onClick = onDismiss) { Text("完成") }
         },
     )
+
+    if (pickingDate) {
+        CalendarPickerDialog(
+            initialDateKey = dateKey,
+            onDismiss = { pickingDate = false },
+            onPick = onPickDate,
+        )
+    }
+
+    if (pickingTime) {
+        WheelTimePickerDialog(
+            initialTime = shown,
+            onDismiss = { pickingTime = false },
+            onPick = { hour, minute -> onSetTime(hour, minute) },
+        )
+    }
 }
 
+/** A label plus a tappable value, for opening a picker. */
 @Composable
-private fun StepChip(label: String, onClick: () -> Unit) {
-    Box(
+private fun PickerField(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    muted: Boolean = false,
+) {
+    Row(
         modifier = Modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(52.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (muted) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            modifier = Modifier.weight(1f),
+        )
+        LedgerIconView(
+            icon = LedgerIcon.CHEVRON_RIGHT,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 16.dp,
         )
     }
 }
@@ -689,6 +813,47 @@ private fun AccountChip(account: AccountEntity, selected: Boolean, onClick: () -
     }
 }
 
+/**
+ * The 「更多」 cell.
+ *
+ * Deliberately the same shape and size as a category cell: it is one more choice in the
+ * same grid, and a differently styled control would read as navigation rather than as
+ * the way to reach the rest of the list.
+ */
+@Composable
+private fun MoreCell(label: String, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            LedgerIconView(
+                icon = LedgerIcon.ELLIPSIS,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 22.dp,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun CategoryCell(
     category: CategoryEntity,
@@ -737,8 +902,23 @@ private fun AccountPicker(
     accounts: List<AccountEntity>,
     selectedId: Long?,
     onSelect: (Long) -> Unit,
+    recordsToHiddenAccount: Boolean = false,
 ) {
-    if (accounts.isEmpty()) return
+    if (accounts.isEmpty()) {
+        // A 累计模式 ledger records to an account it deliberately never shows, so there
+        // is nothing to explain. A 预算模式 ledger whose accounts were all deleted has
+        // nowhere to put the entry at all, and saying so beats a Save button that
+        // silently refuses.
+        if (!recordsToHiddenAccount) {
+            Text(
+                text = "当前账本还没有账户，保存前先到「账户」页添加一个。",
+                style = MaterialTheme.typography.labelSmall,
+                color = LedgerTheme.colors.expense,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()

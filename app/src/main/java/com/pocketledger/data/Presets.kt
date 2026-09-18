@@ -103,9 +103,13 @@ object Presets {
     /** The account a 累计模式 ledger hides but still needs for uniform transactions. */
     const val HIDDEN_ACCOUNT_NAME = "累计账户"
 
+    /** New installs get 支付宝余额 directly; [renameLegacyAlipay] fixes existing ones. */
+    const val ALIPAY_NAME = "支付宝余额"
+    const val ALIPAY_LEGACY_NAME = "支付宝"
+
     private val BUDGET_ACCOUNTS = listOf(
         AccountEntity(name = "现金", type = AccountType.CASH, iconKey = "cash", colorArgb = 0xFF10B981.toInt(), sortOrder = 0),
-        AccountEntity(name = "支付宝", type = AccountType.ALIPAY, iconKey = "alipay", colorArgb = 0xFF1677FF.toInt(), sortOrder = 1),
+        AccountEntity(name = ALIPAY_NAME, type = AccountType.ALIPAY, iconKey = "alipay", colorArgb = 0xFF1677FF.toInt(), sortOrder = 1),
         AccountEntity(name = "微信零钱", type = AccountType.WECHAT, iconKey = "wechat", colorArgb = 0xFF07C160.toInt(), sortOrder = 2),
         AccountEntity(name = "储蓄卡", type = AccountType.BANK_CARD, iconKey = "bank", colorArgb = 0xFF6366F1.toInt(), sortOrder = 3),
         AccountEntity(name = "校园卡", type = AccountType.PREPAID, iconKey = "card", colorArgb = 0xFFF59E0B.toInt(), sortOrder = 4),

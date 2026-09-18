@@ -53,8 +53,16 @@ data class AccountEntity(
     val type: AccountType,
     val iconKey: String = "wallet",
     val colorArgb: Int = 0xFF2F6BFF.toInt(),
-    /** Opening balance; the live balance is always derived, never stored. */
+    /**
+     * The balance the account was last set to, and the moment it was set.
+     *
+     * Editing an account's balance anchors it: everything dated at or before
+     * [balanceAsOfMillis] stops contributing, so correcting a wrong figure does not
+     * require fixing every past entry that produced it. `0` means "no anchor", i.e.
+     * count the whole history -- which is what a migrated or brand-new account wants.
+     */
     val initialBalanceCents: Long = 0,
+    @ColumnInfo(defaultValue = "0") val balanceAsOfMillis: Long = 0,
     val creditLimitCents: Long? = null,
     /** Day of month the statement closes / is due, for credit cards. */
     val billDay: Int? = null,
@@ -144,6 +152,14 @@ data class TxnEntity(
     /** Epoch millis, precise to the second: entries record a real time of day. */
     val happenedAt: Long,
     val localDateKey: String,
+    /**
+     * How the time of day should be presented.
+     *
+     * Three states, not two: "I never touched the time" (show the recorded moment
+     * quietly), "I picked a date and deliberately left the time alone" (show no time
+     * at all), and "I set the time" (show it plainly).
+     */
+    @ColumnInfo(defaultValue = "AUTO") val timeMode: TimeMode = TimeMode.AUTO,
     val source: TxnSource = TxnSource.MANUAL,
     /** Original order number from an imported bill, used for idempotent re-import. */
     val externalNo: String? = null,

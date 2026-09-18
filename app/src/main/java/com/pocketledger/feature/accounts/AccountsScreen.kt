@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -160,9 +159,10 @@ fun AccountsScreen(
     if (state.editorVisible) {
         AccountEditorDialog(
             existing = state.editorTarget,
+            currentBalanceCents = state.editorBalanceCents,
             onDismiss = viewModel::dismissEditor,
             onSave = viewModel::saveAccount,
-            onArchive = viewModel::toggleArchive,
+            onDelete = viewModel::deleteAccount,
         )
     }
 
@@ -231,7 +231,6 @@ private fun AccountCard(row: AccountRow, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (row.account.isArchived) 0.55f else 1f)
             .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -281,7 +280,6 @@ private fun AccountCard(row: AccountRow, onClick: () -> Unit) {
 private fun accountSubtitle(account: com.pocketledger.data.entity.AccountEntity): String {
     val typeLabel = accountTypeLabel(account.type)
     return when {
-        account.isArchived -> "$typeLabel · 已归档"
         !account.includeInTotal -> "$typeLabel · 不计入总资产"
         account.type == AccountType.CREDIT_CARD && account.repayDay != null ->
             "$typeLabel · 每月 ${account.repayDay} 日还款"

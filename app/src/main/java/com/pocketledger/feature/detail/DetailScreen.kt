@@ -203,7 +203,7 @@ private fun FieldsCard(state: DetailUiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            DetailRow("时间", state.timeLabel)
+            TimestampRow(state)
             if (state.type == TxnType.TRANSFER) {
                 DetailRow("转出", state.accountName)
                 DetailRow("转入", state.toAccountName.orEmpty())
@@ -216,6 +216,47 @@ private fun FieldsCard(state: DetailUiState) {
                 state.merchant?.takeIf { it.isNotBlank() }?.let { DetailRow("商家", it) }
             }
             state.note?.takeIf { it.isNotBlank() }?.let { DetailRow("备注", it) }
+        }
+    }
+}
+
+/**
+ * 时间, drawn as a date plus an optional clock reading.
+ *
+ * The clock is muted while it is only "when this was typed" and absent entirely once
+ * the user moved the entry to another day without choosing a time -- three states that
+ * a single formatted string could not express.
+ */
+@Composable
+private fun TimestampRow(state: DetailUiState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = "时间",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(72.dp),
+        )
+        Text(
+            text = state.dateLabel.ifBlank { "—" },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        state.timeLabel?.let { clock ->
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = clock,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (state.timeIsApproximate) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
     }
 }

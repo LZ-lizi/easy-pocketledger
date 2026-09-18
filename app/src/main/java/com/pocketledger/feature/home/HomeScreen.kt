@@ -260,7 +260,7 @@ private fun ViewToggle(viewMode: HomeViewMode, onToggle: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         LedgerIconView(
-            icon = if (viewMode == HomeViewMode.CALENDAR) LedgerIcon.LIST else LedgerIcon.CHART,
+            icon = if (viewMode == HomeViewMode.CALENDAR) LedgerIcon.LIST else LedgerIcon.CALENDAR,
             tint = MaterialTheme.colorScheme.primary,
             size = 18.dp,
         )

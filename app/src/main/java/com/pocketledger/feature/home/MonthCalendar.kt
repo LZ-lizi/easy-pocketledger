@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,20 +17,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pocketledger.data.dao.DayTotal
+import com.pocketledger.domain.Money
 import com.pocketledger.ui.theme.LedgerTheme
 import java.time.LocalDate
 
 private val WEEKDAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
- * Month grid where each day carries a spend-intensity bar.
+ * Month grid with each day's income and spending written into the cell.
  *
- * The bar is relative to the busiest day *of that month*, so the shape of the
- * month is readable at a glance without any axis or legend -- the whole point of a
- * calendar view next to the list. Weeks start on Monday, matching Chinese habit.
+ * The cell used to carry a coloured intensity bar, which showed *how much* only in
+ * relation to the busiest day of the month and never said which way the money went.
+ * Showing the two figures directly -- red for spending, green for income, in the empty
+ * space under the date -- answers "what happened on the 14th" without a tap. Weeks
+ * start on Monday, matching Chinese habit.
  */
 @Composable
 fun MonthCalendar(
@@ -46,9 +50,6 @@ fun MonthCalendar(
     val firstOfMonth = remember(monthKey) { LocalDate.parse("$monthKey-01") }
     val daysInMonth = remember(monthKey) { firstOfMonth.lengthOfMonth() }
     val leadingBlanks = firstOfMonth.dayOfWeek.value - 1        // Monday == 1
-    val peakExpense = remember(dayTotals) {
-        dayTotals.values.maxOfOrNull { it.expenseCents }?.coerceAtLeast(1L) ?: 1L
-    }
 
     Column(
         modifier = modifier
@@ -87,9 +88,7 @@ fun MonthCalendar(
                         val dateKey = date.toString()
                         DayCell(
                             dayNumber = dayNumber,
-                            dateKey = dateKey,
                             total = dayTotals[dateKey],
-                            peakExpense = peakExpense,
                             isToday = date == today,
                             isSelected = dateKey == selectedDateKey,
                             onClick = { onSelectDay(if (dateKey == selectedDateKey) null else dateKey) },
@@ -107,18 +106,15 @@ fun MonthCalendar(
 @Composable
 private fun DayCell(
     dayNumber: Int,
-    dateKey: String,
     total: DayTotal?,
-    peakExpense: Long,
     isToday: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ledger = LedgerTheme.colors
-    val hasIncome = (total?.incomeCents ?: 0L) > 0L
     val expense = total?.expenseCents ?: 0L
-    val intensity = if (expense <= 0L) 0f else (expense.toFloat() / peakExpense).coerceIn(0.18f, 1f)
+    val income = total?.incomeCents ?: 0L
 
     Box(
         modifier = modifier
@@ -151,37 +147,49 @@ private fun DayCell(
             },
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 4.dp),
+                .padding(top = 3.dp),
         )
 
-        if (expense > 0L) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 5.dp)
-                    .fillMaxWidth(0.52f)
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimary.copy(alpha = intensity)
-                        } else {
-                            ledger.expense.copy(alpha = intensity)
-                        }
-                    )
-            )
-        }
-
-        if (hasIncome) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 5.dp, bottom = 5.dp)
-                    .height(5.dp)
-                    .fillMaxWidth(0.12f)
-                    .clip(CircleShape)
-                    .background(if (isSelected) MaterialTheme.colorScheme.onPrimary else ledger.income)
-            )
+        // The amounts fill the space under the date. On a selected cell the coloured
+        // text would fight the primary background, so it is drawn in the on-primary
+        // colour there instead -- the position still says which figure is which.
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 3.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (expense > 0L) {
+                DayAmount(
+                    text = "-${Money.formatTiny(expense)}",
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else ledger.expense,
+                )
+            }
+            if (income > 0L) {
+                DayAmount(
+                    text = "+${Money.formatTiny(income)}",
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else ledger.income,
+                )
+            }
         }
     }
+}
+
+/**
+ * One amount inside a day cell.
+ *
+ * `softWrap = false` plus the tiny style keeps a four-figure amount on the single line
+ * the cell can afford; [Money.formatTiny] has already capped the length.
+ */
+@Composable
+private fun DayAmount(text: String, color: Color) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = 9.sp,
+        lineHeight = 11.sp,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+    )
 }

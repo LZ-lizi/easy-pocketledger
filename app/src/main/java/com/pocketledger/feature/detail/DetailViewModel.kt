@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
 import com.pocketledger.data.entity.TxnSource
 import com.pocketledger.data.entity.TxnType
+import com.pocketledger.data.entity.TimeMode
 import com.pocketledger.data.repo.LedgerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,17 @@ data class DetailUiState(
     val toAccountName: String? = null,
     val merchant: String? = null,
     val note: String? = null,
-    val timeLabel: String = "",
+    val dateLabel: String = "",
+    /**
+     * Clock reading, or null when the entry's time carries no meaning.
+     *
+     * Null covers "the user moved this to another day without touching the clock":
+     * showing the moment the row happened to be typed would be a claim about when the
+     * money moved that the user never made.
+     */
+    val timeLabel: String? = null,
+    /** True while the time is only "when this was recorded", so it is drawn muted. */
+    val timeIsApproximate: Boolean = true,
     val isExcludedFromStats: Boolean = false,
     val sourceLabel: String = "",
 )
@@ -72,6 +83,8 @@ class DetailViewModel(
                 else -> category?.iconKey ?: "more"
             }
 
+            val stamp = Instant.ofEpochMilli(txn.happenedAt).atZone(ZoneId.systemDefault())
+
             _uiState.update {
                 it.copy(
                     missing = false,
@@ -85,7 +98,13 @@ class DetailViewModel(
                     toAccountName = txn.toAccountId?.let { id -> accounts[id]?.name },
                     merchant = txn.merchant,
                     note = txn.note,
-                    timeLabel = timestampLabel(txn.happenedAt),
+                    dateLabel = stamp.format(DATE_FORMAT),
+                    timeLabel = if (txn.timeMode == TimeMode.HIDDEN) {
+                        null
+                    } else {
+                        stamp.format(CLOCK_FORMAT)
+                    },
+                    timeIsApproximate = txn.timeMode == TimeMode.AUTO,
                     isExcludedFromStats = txn.isExcludedFromStats,
                     sourceLabel = sourceLabel(txn.source),
                 )
@@ -95,20 +114,16 @@ class DetailViewModel(
 
     companion object {
 
-        private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy年M月d日 EEE HH:mm")
-
-        /** Minute precision, matching what the entry keypad can set. */
-        fun timestampLabel(millis: Long): String =
-            Instant.ofEpochMilli(millis)
-                .atZone(ZoneId.systemDefault())
-                .format(TIME_FORMAT)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy年M月d日 EEE")
+        private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 
         private fun sourceLabel(source: TxnSource): String = when (source) {
             TxnSource.MANUAL -> "手动录入"
             TxnSource.TEMPLATE -> "模板"
             TxnSource.IMPORT_ALIPAY -> "支付宝导入"
             TxnSource.IMPORT_WECHAT -> "微信导入"
-            TxnSource.INSTALLMENT -> "月付/白条自动生成"
+            TxnSource.IMPORT_CSV -> "CSV 导入"
+            TxnSource.INSTALLMENT -> "月付自动生成"
         }
 
         fun factory(transactionId: Long): ViewModelProvider.Factory = viewModelFactory {

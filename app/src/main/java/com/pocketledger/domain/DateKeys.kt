@@ -82,4 +82,19 @@ object DateKeys {
         val time = if (originalTime == LocalTime.MIDNIGHT) LocalTime.now() else originalTime
         return date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     }
+
+    /**
+     * A specific day at a specific wall-clock time.
+     *
+     * The counterpart to [withTimeOfDay] for when the user has actually chosen the
+     * clock reading, rather than keeping whatever the row already carried.
+     */
+    fun atTime(dateKey: String, time: LocalTime): Long {
+        val date = runCatching { LocalDate.parse(dateKey) }.getOrElse { LocalDate.now() }
+        return date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }
+
+    /** The wall-clock time of an instant, for pre-filling a time picker. */
+    fun timeOf(millis: Long): LocalTime =
+        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalTime()
 }

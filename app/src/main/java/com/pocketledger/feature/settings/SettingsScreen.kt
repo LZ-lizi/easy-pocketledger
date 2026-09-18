@@ -48,6 +48,7 @@ fun SettingsScreen(
     onOpenTerms: () -> Unit,
     onOpenInstallments: () -> Unit,
     onOpenPinned: () -> Unit,
+    onOpenImport: () -> Unit,
     onOpenExport: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -71,6 +72,7 @@ fun SettingsScreen(
         SettingsSection(
             title = "数据",
             entries = listOf(
+                SettingsEntry("导入账单", "从微信、支付宝导出的账单批量记账", onOpenImport),
                 SettingsEntry("导出数据", "把当前账本导出为 CSV", onOpenExport),
             ),
         ),

@@ -70,4 +70,22 @@ class AppPreferences(private val context: Context) {
             prefs[pinnedCategories] = ids.map(Long::toString).toSet()
         }
     }
+
+    /**
+     * Idempotence markers for one-off data repairs (see `DataRepair`).
+     *
+     * A repair that matches on preset *values* must not re-run: renaming every account
+     * still called 支付宝 is right exactly once, but would also catch an account the
+     * user deliberately gave that name a month later.
+     */
+    private val completedRepairs = stringSetPreferencesKey("data_repairs_done")
+
+    suspend fun repairDone(id: String): Boolean =
+        id in (context.settingsStore.data.first()[completedRepairs] ?: emptySet())
+
+    suspend fun markRepairDone(id: String) {
+        context.settingsStore.edit { prefs ->
+            prefs[completedRepairs] = (prefs[completedRepairs] ?: emptySet()) + id
+        }
+    }
 }

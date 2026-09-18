@@ -39,9 +39,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.TxnType
+import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
+import com.pocketledger.ui.components.WheelTimePickerDialog
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.util.DateLabels
+import java.time.LocalTime
 
 /**
  * Form-style editor for an existing transaction.
@@ -175,10 +181,13 @@ fun EditScreen(
             label = { Text("备注") },
         )
 
-        DateStepper(
+        DateTimeFields(
             dateKey = state.dateKey,
-            onShift = viewModel::shiftDate,
-            onToday = viewModel::setToday,
+            time = state.time,
+            storedMillis = state.storedMillis,
+            onPickDate = viewModel::setDate,
+            onPickTime = viewModel::setTime,
+            onClearTime = viewModel::clearTime,
         )
 
         if (state.canExcludeFromStats) {
@@ -419,41 +428,90 @@ private fun AccountSection(
     }
 }
 
+/**
+ * Date and time for this entry, each opening its own picker.
+ *
+ * Both used to be ±-chips. A stepper is fine for "yesterday" and useless for
+ * "the 3rd of last month", and the ±5 minute chips could not express 13:47 at all.
+ * The pickers float above this screen, so neither costs a navigation.
+ */
 @Composable
-private fun DateStepper(dateKey: String, onShift: (Long) -> Unit, onToday: () -> Unit) {
+private fun DateTimeFields(
+    dateKey: String,
+    time: LocalTime?,
+    storedMillis: Long,
+    onPickDate: (String) -> Unit,
+    onPickTime: (hour: Int, minute: Int) -> Unit,
+    onClearTime: () -> Unit,
+) {
+    var pickingDate by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
+    val effectiveTime = time ?: DateKeys.timeOf(storedMillis)
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SectionLabel("日期")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StepChip("‹") { onShift(-1) }
-            Text(
-                text = DateLabels.dayLabel(dateKey),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp),
-            )
-            StepChip("今天", onClick = onToday, wide = true)
-            Spacer(Modifier.width(8.dp))
-            StepChip("›") { onShift(1) }
+        PickRow(
+            value = DateLabels.dayLabel(dateKey),
+            onClick = { pickingDate = true },
+        )
+
+        SectionLabel("时间")
+        PickRow(
+            value = if (time == null) {
+                "%02d:%02d（原始时间）".format(effectiveTime.hour, effectiveTime.minute)
+            } else {
+                "%02d:%02d".format(effectiveTime.hour, effectiveTime.minute)
+            },
+            muted = time == null,
+            onClick = { pickingTime = true },
+        )
+        if (time != null) {
+            TextButton(onClick = onClearTime) { Text("改回原始时间") }
         }
+    }
+
+    if (pickingDate) {
+        CalendarPickerDialog(
+            initialDateKey = dateKey,
+            onDismiss = { pickingDate = false },
+            onPick = onPickDate,
+        )
+    }
+
+    if (pickingTime) {
+        WheelTimePickerDialog(
+            initialTime = effectiveTime,
+            onDismiss = { pickingTime = false },
+            onPick = onPickTime,
+        )
     }
 }
 
 @Composable
-private fun StepChip(label: String, wide: Boolean = false, onClick: () -> Unit) {
-    Box(
+private fun PickRow(value: String, onClick: () -> Unit, muted: Boolean = false) {
+    Row(
         modifier = Modifier
-            .clip(CircleShape)
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)
-            .padding(horizontal = if (wide) 14.dp else 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (muted) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            modifier = Modifier.weight(1f),
+        )
+        LedgerIconView(
+            icon = LedgerIcon.CHEVRON_RIGHT,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            size = 16.dp,
         )
     }
 }

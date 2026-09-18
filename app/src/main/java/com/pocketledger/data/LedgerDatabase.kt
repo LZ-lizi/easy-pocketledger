@@ -10,6 +10,7 @@ import com.pocketledger.data.dao.AllowanceDao
 import com.pocketledger.data.dao.BudgetDao
 import com.pocketledger.data.dao.CategoryDao
 import com.pocketledger.data.dao.InstallmentDao
+import com.pocketledger.data.dao.ImportDao
 import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.TagDao
 import com.pocketledger.data.dao.TermDao
@@ -55,7 +56,7 @@ import com.pocketledger.data.entity.WishEntity
         InstallmentPlanEntity::class,
         InstallmentPeriodEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -70,6 +71,7 @@ abstract class LedgerDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun termDao(): TermDao
     abstract fun installmentDao(): InstallmentDao
+    abstract fun importDao(): ImportDao
 
     companion object {
         const val NAME = "ledger.db"
@@ -77,7 +79,7 @@ abstract class LedgerDatabase : RoomDatabase() {
         fun build(context: Context): LedgerDatabase =
             Room.databaseBuilder(context.applicationContext, LedgerDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

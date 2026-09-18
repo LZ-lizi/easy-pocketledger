@@ -25,13 +25,18 @@ data class AccountRow(
 
 data class AccountsUiState(
     val accounts: List<AccountRow> = emptyList(),
-    /** Everything that is not a credit card, archived accounts excluded. */
+    /** Everything that is not a credit card and counts toward the total. */
     val assetsCents: Long = 0,
     /** Credit-card debt, reported as a positive number. */
     val liabilitiesCents: Long = 0,
     val editorVisible: Boolean = false,
     /** Null while creating a new account. */
     val editorTarget: AccountEntity? = null,
+    /**
+     * Derived balance of [editorTarget], so the editor can offer the live figure for
+     * editing instead of the stored opening amount.
+     */
+    val editorBalanceCents: Long? = null,
     val ledgerName: String = "",
     val ledgerType: LedgerType = LedgerType.BUDGET,
     val selectedLedgerId: Long? = null,
@@ -62,16 +67,16 @@ class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() 
         val current = ledgers.firstOrNull { it.id == selectedId }
         val balanceById = balances.associate { it.accountId to it.balanceCents }
 
-        // Archived accounts stay visible (muted, sorted last) so they can be
-        // restored -- hiding them would strand the un-archive action.
+        // Accounts are ordered by the user's own ordering. They used to sort archived
+        // ones last, but archiving is gone and legacy archived rows are ordinary again.
         val rows = accounts
             .map { AccountRow(it, balanceById[it.id] ?: it.initialBalanceCents) }
-            .sortedWith(compareBy({ it.account.isArchived }, { it.account.sortOrder }))
+            .sortedBy { it.account.sortOrder }
 
         var assets = 0L
         var liabilities = 0L
         for (row in rows) {
-            if (row.account.isArchived || !row.account.includeInTotal) continue
+            if (!row.account.includeInTotal) continue
             if (row.account.type == AccountType.CREDIT_CARD) {
                 // A credit card goes negative to mean "owed", so flip the sign.
                 if (row.balanceCents < 0L) liabilities += -row.balanceCents
@@ -88,6 +93,9 @@ class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() 
             liabilitiesCents = liabilities,
             editorVisible = editorState != null,
             editorTarget = editorState?.target,
+            editorBalanceCents = editorState?.target?.let {
+                balanceById[it.id] ?: it.initialBalanceCents
+            },
             ledgerName = current?.name.orEmpty(),
             ledgerType = current?.type ?: LedgerType.BUDGET,
             selectedLedgerId = selectedId,
@@ -124,9 +132,9 @@ class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() 
         }
     }
 
-    fun toggleArchive(account: AccountEntity) {
+    fun deleteAccount(account: AccountEntity) {
         viewModelScope.launch {
-            repository.setAccountArchived(account.id, !account.isArchived)
+            repository.deleteAccount(account.id)
             editor.value = null
         }
     }

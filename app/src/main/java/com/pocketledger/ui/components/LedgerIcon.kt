@@ -32,11 +32,15 @@ enum class LedgerIcon {
     // Navigation
     LIST,
     CHART,
+    /** A month grid, for the header button that switches to calendar view. */
+    CALENDAR,
     WALLET,
     PERSON,
     PLUS,
     SETTINGS,
     CHEVRON_RIGHT,
+    /** Three dots: opens the full category list from the entry grid. */
+    ELLIPSIS,
 
     // Expense 大类
     FOOD,
@@ -90,6 +94,7 @@ enum class LedgerIcon {
             "work" -> WORK
             "pet" -> PET
             "other" -> OTHER
+            "calendar" -> CALENDAR
             "income" -> INCOME
             "cash" -> CASH
             "card", "prepaid" -> CARD
@@ -139,6 +144,33 @@ private fun DrawScope.drawLedgerIcon(icon: LedgerIcon, tint: Color) {
         LedgerIcon.CHART -> listOf(0.28f to 0.36f, 0.50f to 0.58f, 0.72f to 0.46f)
             .forEach { (cx, f) -> line(cx, 0.80f, cx, 0.80f - f, w * 0.13f) }
 
+        /**
+         * A calendar: page, header rule, two binding rings and a grid of dates.
+         *
+         * The earlier toggle used a bar chart, which said "statistics" rather than
+         * "month view" -- the ring-and-grid silhouette is what makes it unmistakable at
+         * 22dp.
+         */
+        LedgerIcon.CALENDAR -> {
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(w * 0.14f, h * 0.26f),
+                size = Size(w * 0.72f, h * 0.58f),
+                cornerRadius = CornerRadius(w * 0.11f),
+                style = outline,
+            )
+            // Header rule, so the top strip reads as the month/date bar.
+            line(0.14f, 0.44f, 0.86f, 0.44f, thin)
+            // Binding rings.
+            line(0.34f, 0.16f, 0.34f, 0.30f, thin)
+            line(0.66f, 0.16f, 0.66f, 0.30f, thin)
+            // Date dots.
+            listOf(0.34f, 0.50f, 0.66f).forEach { x ->
+                drawCircle(tint, w * 0.045f, Offset(w * x, h * 0.58f))
+                drawCircle(tint, w * 0.045f, Offset(w * x, h * 0.72f))
+            }
+        }
+
         LedgerIcon.WALLET -> {
             drawRoundRect(
                 color = tint,
@@ -178,6 +210,11 @@ private fun DrawScope.drawLedgerIcon(icon: LedgerIcon, tint: Color) {
             line(0.40f, 0.26f, 0.62f, 0.50f, stroke)
             line(0.62f, 0.50f, 0.40f, 0.74f, stroke)
         }
+
+        // Three dots. Distinct from OTHER, which is a category glyph and must keep
+        // meaning 其他 wherever a category icon is drawn.
+        LedgerIcon.ELLIPSIS -> listOf(0.26f, 0.50f, 0.74f)
+            .forEach { x -> drawCircle(tint, w * 0.085f, Offset(w * x, h * 0.5f)) }
 
         // A bowl: the bottom half of a circle plus its rim.
         LedgerIcon.FOOD -> {

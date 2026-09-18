@@ -337,6 +337,11 @@ private fun CategoryEditorDialog(
 
     val isTopLevel = parentId == null
     val canSave = name.isNotBlank()
+    // A new 大类 gets its own button and a new 小类 always belongs to the group it was
+    // added from, so "本身就是大类" is only a meaningful choice while editing.
+    val allowTopLevel = existing != null
+    val showParentPicker = kind == CategoryKind.EXPENSE &&
+        (existing != null || defaultParentId != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -364,7 +369,7 @@ private fun CategoryEditorDialog(
                     label = { Text("名称") },
                 )
 
-                if (kind == CategoryKind.EXPENSE) {
+                if (showParentPicker) {
                     Text(
                         text = "归属大类",
                         style = MaterialTheme.typography.labelMedium,
@@ -374,7 +379,9 @@ private fun CategoryEditorDialog(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        SelectChip("本身就是大类", isTopLevel) { parentId = null }
+                        if (allowTopLevel) {
+                            SelectChip("本身就是大类", isTopLevel) { parentId = null }
+                        }
                         parentOptions.forEach { parent ->
                             SelectChip(parent.name, parentId == parent.id) { parentId = parent.id }
                         }

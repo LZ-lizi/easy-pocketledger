@@ -54,8 +54,24 @@ enum class TxnSource {
     TEMPLATE,
     IMPORT_ALIPAY,
     IMPORT_WECHAT,
+    IMPORT_CSV,
     /** Produced by an installment plan falling due. */
     INSTALLMENT,
+}
+
+/**
+ * How a transaction's time of day should be shown.
+ *
+ * - [AUTO]: the user never touched the time, so it is the moment of entry and is
+ *   shown quietly.
+ * - [HIDDEN]: a date was chosen and the time deliberately left alone, so there is no
+ *   meaningful time to show.
+ * - [EXPLICIT]: the user set a time, so it is shown plainly.
+ */
+enum class TimeMode {
+    AUTO,
+    HIDDEN,
+    EXPLICIT,
 }
 
 enum class BudgetPeriodType {

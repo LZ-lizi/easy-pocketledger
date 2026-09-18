@@ -38,7 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.domain.DateKeys
+import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
+import com.pocketledger.ui.util.DateLabels
 import java.time.LocalDate
 
 /**
@@ -222,37 +226,19 @@ private fun TermEditorDialog(
                     label = { Text("名称") },
                 )
 
-                OutlinedTextField(
-                    value = startKey,
-                    onValueChange = { startKey = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("开始日期") },
-                    placeholder = { Text("2026-09-01") },
-                    supportingText = {
-                        Text("格式 YYYY-MM-DD", style = MaterialTheme.typography.labelSmall)
-                    },
-                    isError = runCatching { LocalDate.parse(startKey) }.isFailure,
+                DateField(
+                    label = "开始日期",
+                    dateKey = startKey,
+                    onPick = { startKey = it },
                 )
                 QuickChip("今天开始") { startKey = today.toString() }
 
-                OutlinedTextField(
-                    value = endKey,
-                    onValueChange = { endKey = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("结束日期") },
-                    placeholder = { Text("2027-01-15") },
-                    isError = runCatching { LocalDate.parse(endKey) }.isFailure || !rangeValid,
-                    supportingText = {
-                        if (!rangeValid) {
-                            Text(
-                                text = "结束日期不能早于开始日期",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = LedgerTheme.colors.expense,
-                            )
-                        }
-                    },
+                DateField(
+                    label = "结束日期",
+                    dateKey = endKey,
+                    onPick = { endKey = it },
+                    isError = !rangeValid,
+                    errorText = if (!rangeValid) "结束日期不能早于开始日期" else null,
                 )
                 QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
 
@@ -284,6 +270,74 @@ private fun TermEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+}
+
+/**
+ * A date that opens a calendar instead of a keyboard.
+ *
+ * The text field it replaces demanded `YYYY-MM-DD`, rejected every other spelling of
+ * the same day, and could not show which weekday the range would start on -- which is
+ * most of what a term boundary is chosen for.
+ */
+@Composable
+private fun DateField(
+    label: String,
+    dateKey: String,
+    onPick: (String) -> Unit,
+    isError: Boolean = false,
+    errorText: String? = null,
+) {
+    var picking by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .clickable { picking = true }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(84.dp),
+            )
+            Text(
+                text = DateLabels.dayLabel(dateKey),
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isError) {
+                    LedgerTheme.colors.expense
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.weight(1f),
+            )
+            LedgerIconView(
+                icon = LedgerIcon.CHEVRON_RIGHT,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 16.dp,
+            )
+        }
+        errorText?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall,
+                color = LedgerTheme.colors.expense,
+            )
+        }
+    }
+
+    if (picking) {
+        CalendarPickerDialog(
+            initialDateKey = dateKey,
+            onDismiss = { picking = false },
+            onPick = onPick,
+            title = "选择$label",
+        )
+    }
 }
 
 @Composable

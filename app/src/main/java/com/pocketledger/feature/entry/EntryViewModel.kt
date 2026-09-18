@@ -14,6 +14,7 @@ import com.pocketledger.data.entity.InstallmentPlanEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.data.entity.TxnSource
 import com.pocketledger.data.entity.TxnType
+import com.pocketledger.data.entity.TimeMode
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.di.AppContainer
 import com.pocketledger.domain.DateKeys
@@ -42,6 +43,23 @@ enum class EntryMode(val label: String) {
     MONTHLY("月付"),
 }
 
+/**
+ * One 大类 and the items drawn under it in the 「更多」 menu.
+ *
+ * Carries the parent's own name, icon and colour so the heading is recognisable at a
+ * glance -- the same icon the category grid used to file it under.
+ */
+data class CategoryGroup(
+    val key: String,
+    val label: String,
+    val iconKey: String,
+    val colorArgb: Int,
+    val items: List<CategoryEntity>,
+)
+
+/** Income items have no parent, so their single group needs its own accent. */
+private const val INCOME_GROUP_COLOR = 0xFF12A150.toInt()
+
 data class EntryUiState(
     val mode: EntryMode = EntryMode.EXPENSE,
     /** Raw keypad text such as `"12.3"`; parsed only when needed. */
@@ -50,6 +68,14 @@ data class EntryUiState(
     val feeInput: String = "",
     val allCategories: List<CategoryEntity> = emptyList(),
     val accounts: List<AccountEntity> = emptyList(),
+    /**
+     * The account a 累计模式 ledger keeps hidden.
+     *
+     * It is never offered in a picker -- showing it would contradict the whole point of
+     * that ledger type -- but an entry still has to attach to something. Without this
+     * fallback every entry in such a ledger was blocked with Save permanently disabled.
+     */
+    val hiddenAccountId: Long? = null,
     val selectedCategoryId: Long? = null,
     val selectedAccountId: Long? = null,
     /** Destination account; transfers only. */
@@ -65,7 +91,6 @@ data class EntryUiState(
     val recentCategoryIds: List<Long> = emptyList(),
     /** Categories pinned to the first screen of the grid. */
     val pinnedCategoryIds: Set<Long> = emptySet(),
-    val categoriesExpanded: Boolean = false,
     // ---------------------------------------------------------------- 月付 plan
     val planName: String = "",
     val planPeriods: String = "12",
@@ -83,6 +108,17 @@ data class EntryUiState(
         }
 
     val hasCustomTime: Boolean get() = customTime != null
+
+    /**
+     * The account a saved entry attaches to.
+     *
+     * The picked account when there is one, otherwise the ledger's hidden account --
+     * the only way a 累计模式 ledger can record anything.
+     */
+    val effectiveAccountId: Long? get() = selectedAccountId ?: hiddenAccountId
+
+    /** True when the ledger records to an account the user never picks. */
+    val accountIsImplicit: Boolean get() = accounts.isEmpty() && hiddenAccountId != null
 
     val kind: CategoryKind
         get() = if (mode == EntryMode.INCOME) CategoryKind.INCOME else CategoryKind.EXPENSE
@@ -104,23 +140,48 @@ data class EntryUiState(
     /**
      * The grid actually drawn.
      *
-     * Collapsed shows only the pinned set -- by default the first three rows -- so the
-     * common case is one glance with no scrolling. Expanding reveals the rest rather
-     * than hiding categories entirely, so nothing becomes unreachable.
+     * Always the most-used items, never everything: the outermost screen is for the
+     * handful of categories that carry most entries, and the rest live one tap away
+     * behind 「更多」. With no explicit pinning the first [DEFAULT_PRIMARY_CATEGORIES]
+     * of the usage ordering stand in, which is the same promise the pinned set makes.
      */
     val visibleCategories: List<CategoryEntity>
         get() {
             val all = orderedCategories
-            if (categoriesExpanded) return all
             if (pinnedCategoryIds.isEmpty()) return all.take(DEFAULT_PRIMARY_CATEGORIES)
             return all.filter { it.id in pinnedCategoryIds }
         }
 
-    /** How many items the 「更多」 button would reveal. */
-    val hiddenCategoryCount: Int
-        get() = (orderedCategories.size - visibleCategories.size).coerceAtLeast(0)
-
-    val showMoreButton: Boolean get() = categoriesExpanded || hiddenCategoryCount > 0
+    /**
+     * [visibleCategories]' full list, bucketed by 大类, for the 「更多」 menu.
+     *
+     * Finding a rarely used item is a matter of remembering which 大类 owns it -- 打印
+     * lives under 学习 -- so items sharing a parent are kept together under that
+     * heading instead of being listed in one flat run. Groups keep the usage order of
+     * their first item, so the menu opens on whatever is used most.
+     */
+    val categoryGroups: List<CategoryGroup>
+        get() {
+            val items = orderedCategories
+            if (items.isEmpty()) return emptyList()
+            // Income categories are all roots, so a single heading is the honest grouping.
+            if (kind == CategoryKind.INCOME) {
+                return listOf(CategoryGroup("income", "收入", "income", INCOME_GROUP_COLOR, items))
+            }
+            val byId = allCategories.associateBy { it.id }
+            return items
+                .groupBy { it.parentId }
+                .mapNotNull { (parentId, children) ->
+                    val parent = parentId?.let { byId[it] } ?: return@mapNotNull null
+                    CategoryGroup(
+                        key = "parent-${parent.id}",
+                        label = parent.name,
+                        iconKey = parent.iconKey,
+                        colorArgb = parent.colorArgb,
+                        items = children,
+                    )
+                }
+        }
 
     val amountCents: Long get() = Money.parseYuanToCents(amountInput) ?: 0L
 
@@ -140,19 +201,35 @@ data class EntryUiState(
     val canSave: Boolean
         get() = when (mode) {
             // Money moving between two of your own accounts is not spending, so no
-            // category is required -- but it must actually move somewhere else.
+            // category is required -- but it must actually move somewhere else. A
+            // hidden fallback account cannot satisfy this: a transfer needs two real,
+            // pickable accounts, which a 累计模式 ledger does not have.
             EntryMode.TRANSFER -> amountCents > 0L &&
                 selectedAccountId != null &&
                 selectedToAccountId != null &&
                 selectedAccountId != selectedToAccountId
 
             EntryMode.MONTHLY -> amountCents > 0L &&
-                selectedAccountId != null &&
+                effectiveAccountId != null &&
                 planName.isNotBlank() &&
                 planPeriodsValue != null &&
                 planRepayDayValue != null
 
-            else -> amountCents > 0L && selectedAccountId != null && selectedCategoryId != null
+            else -> amountCents > 0L &&
+                effectiveAccountId != null &&
+                selectedCategoryId != null
+        }
+
+    /** True when the entry may be recorded at a time, not just on a day. */
+    val timeMode: TimeMode
+        get() = when {
+            // A time the user actually chose is worth showing plainly.
+            customTime != null -> TimeMode.EXPLICIT
+            // Moving the day without touching the clock means the clock reading is just
+            // "whenever this was typed", so the detail view hides it rather than
+            // claiming the entry happened at 14:37 on a day it did not.
+            dateKey != DateKeys.dateKey(LocalDate.now()) -> TimeMode.HIDDEN
+            else -> TimeMode.AUTO
         }
 
     /** Accounts offered as the destination, i.e. everything except the source. */
@@ -205,6 +282,11 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
+            repository.observeHiddenAccounts().collect { hidden ->
+                _uiState.update { it.copy(hiddenAccountId = hidden.firstOrNull()?.id) }
+            }
+        }
+        viewModelScope.launch {
             val recent = repository.recentCategoryIds()
             _uiState.update { it.copy(recentCategoryIds = recent) }
         }
@@ -225,7 +307,6 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
                 selectedCategoryId = null,
                 feeInput = if (mode == EntryMode.TRANSFER) state.feeInput else "",
                 planFeeInput = if (mode == EntryMode.MONTHLY) state.planFeeInput else "",
-                categoriesExpanded = false,
             )
         }
     }
@@ -251,10 +332,6 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun selectCategory(id: Long) {
         _uiState.update { it.copy(selectedCategoryId = id) }
-    }
-
-    fun toggleCategoriesExpanded() {
-        _uiState.update { it.copy(categoriesExpanded = !it.categoriesExpanded) }
     }
 
     fun selectAccount(id: Long) {
@@ -327,7 +404,7 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
         val state = _uiState.value
         if (!state.canSave) return
         val cents = Money.parseYuanToCents(state.amountInput) ?: return
-        val accountId = state.selectedAccountId ?: return
+        val accountId = state.effectiveAccountId ?: return
 
         viewModelScope.launch {
             if (state.isMonthly) {
@@ -346,6 +423,7 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
                         happenedAt = epochMillisFor(state.dateKey, state.customTime),
                         localDateKey = state.dateKey,
                         source = TxnSource.MANUAL,
+                        timeMode = state.timeMode,
                     )
                 )
             }

@@ -2,6 +2,7 @@ package com.pocketledger.di
 
 import android.content.Context
 import com.pocketledger.data.BudgetAlertChecker
+import com.pocketledger.data.DataRepair
 import com.pocketledger.data.InstallmentRunner
 import com.pocketledger.data.LedgerDatabase
 import com.pocketledger.data.prefs.AppPreferences
@@ -51,6 +52,7 @@ class AppContainer(context: Context) {
             tagDao = db.tagDao(),
             termDao = db.termDao(),
             installmentDao = db.installmentDao(),
+            importDao = db.importDao(),
         )
     }
 
@@ -79,6 +81,9 @@ class AppContainer(context: Context) {
 
     private val budgetNotifier: BudgetNotifier by lazy { BudgetNotifier(appContext) }
 
+    /** One-off data fix-ups that a schema migration cannot express. */
+    private val dataRepair: DataRepair by lazy { DataRepair(database.accountDao(), preferences) }
+
     private val budgetAlertChecker: BudgetAlertChecker by lazy {
         BudgetAlertChecker(repository, preferences, budgetNotifier)
     }
@@ -89,6 +94,8 @@ class AppContainer(context: Context) {
     init {
         appScope.launch {
             adoptPreLedgerDataIfNeeded()
+            // After adoption, so a ledger seeded for pre-ledger data is repaired too.
+            runCatching { dataRepair.run() }
             selectInitialLedger()
             // Instalments are caught up before startup is declared complete, so the
             // first frame already includes any charge that came due while closed.

@@ -40,6 +40,29 @@ object Money {
         if (cents % 100 == 0L) format(cents).removeSuffix(".00") else format(cents)
 
     /**
+     * Shortest honest form of an amount, for calendar cells roughly 40dp wide.
+     *
+     * Yuan only, because a fen is unreadable at that size and the goal is telling a
+     * 8 元 day from an 80 元 one, not exact bookkeeping -- tapping the day shows the
+     * real figures. Ten thousand yuan and up switch to 万 so the text can never
+     * overflow the cell.
+     */
+    fun formatTiny(cents: Long): String {
+        val abs = if (cents < 0) -cents else cents
+        if (abs == 0L) return "0"
+        val yuan = abs / 100
+        return when {
+            yuan == 0L -> "<1"
+            yuan < 10_000L -> yuan.toString()
+            else -> {
+                val tenths = yuan / 1_000L          // tenths of 万
+                val prefix = if (cents < 0) "-" else ""
+                if (tenths % 10L == 0L) "$prefix${tenths / 10}万" else "$prefix${tenths / 10}.${tenths % 10}万"
+            }
+        }
+    }
+
+    /**
      * Parses keypad input such as `"12"`, `"12."`, `"12.3"`, `"12.34"`.
      *
      * Returns null for anything that is not a well-formed amount, so callers can
