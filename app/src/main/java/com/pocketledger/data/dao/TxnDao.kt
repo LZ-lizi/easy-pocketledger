@@ -80,21 +80,33 @@ interface TxnDao {
      *
      * A transfer's fee is a real cost, so it counts as expense; the transferred
      * principal itself is neither income nor expense.
+     *
+     * [mainCategoryId] filters to one 大类: a leaf matches through `c.parentId` and a
+     * top-level row through `c.id`, so one parameter covers both.
      */
     @Query(
         """
-        SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountCents ELSE 0 END), 0) AS incomeCents,
+        SELECT COALESCE(SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE 0 END), 0) AS incomeCents,
                COALESCE(SUM(CASE
-                                WHEN type = 'EXPENSE' THEN amountCents
-                                WHEN type = 'TRANSFER' THEN COALESCE(feeCents, 0)
+                                WHEN t.type = 'EXPENSE' THEN t.amountCents
+                                WHEN t.type = 'TRANSFER' THEN COALESCE(t.feeCents, 0)
                                 ELSE 0
                             END), 0) AS expenseCents
-        FROM txn
-        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isExcludedFromStats = 0
-          AND localDateKey BETWEEN :startKey AND :endKey
+        FROM txn t
+        LEFT JOIN category c ON c.id = t.categoryId
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL AND t.isExcludedFromStats = 0
+          AND t.localDateKey BETWEEN :startKey AND :endKey
+          AND (:mainCategoryId IS NULL
+               OR c.id = :mainCategoryId
+               OR c.parentId = :mainCategoryId)
         """
     )
-    fun observeTotals(ledgerId: Long, startKey: String, endKey: String): Flow<PeriodTotals>
+    fun observeTotals(
+        ledgerId: Long,
+        startKey: String,
+        endKey: String,
+        mainCategoryId: Long?,
+    ): Flow<PeriodTotals>
 
     /**
      * Expense rolled up to top-level categories.
@@ -112,6 +124,9 @@ interface TxnDao {
           AND t.type = 'EXPENSE'
           AND t.isExcludedFromStats = 0
           AND t.localDateKey BETWEEN :startKey AND :endKey
+          AND (:mainCategoryId IS NULL
+               OR c.id = :mainCategoryId
+               OR c.parentId = :mainCategoryId)
         GROUP BY COALESCE(c.parentId, c.id)
         """
     )
@@ -119,6 +134,7 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
+        mainCategoryId: Long?,
     ): Flow<List<MainCategoryTotal>>
 
     @Query(
@@ -126,11 +142,15 @@ interface TxnDao {
         SELECT t.categoryId AS categoryId,
                SUM(t.amountCents) AS totalCents
         FROM txn t
+        LEFT JOIN category c ON c.id = t.categoryId
         WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL
           AND t.type = 'EXPENSE'
           AND t.isExcludedFromStats = 0
           AND t.categoryId IS NOT NULL
           AND t.localDateKey BETWEEN :startKey AND :endKey
+          AND (:mainCategoryId IS NULL
+               OR c.id = :mainCategoryId
+               OR c.parentId = :mainCategoryId)
         GROUP BY t.categoryId
         ORDER BY totalCents DESC
         """
@@ -139,6 +159,7 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
+        mainCategoryId: Long?,
     ): Flow<List<CategoryTotal>>
 
     /** Per-day net for the calendar view; a month of rows, never the whole table. */
@@ -157,12 +178,16 @@ interface TxnDao {
 
     @Query(
         """
-        SELECT substr(localDateKey, 1, 7) AS monthKey,
-               COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountCents ELSE 0 END), 0) AS incomeCents,
-               COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountCents ELSE 0 END), 0) AS expenseCents
-        FROM txn
-        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isExcludedFromStats = 0
-          AND localDateKey BETWEEN :startKey AND :endKey
+        SELECT substr(t.localDateKey, 1, 7) AS monthKey,
+               COALESCE(SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE 0 END), 0) AS incomeCents,
+               COALESCE(SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amountCents ELSE 0 END), 0) AS expenseCents
+        FROM txn t
+        LEFT JOIN category c ON c.id = t.categoryId
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL AND t.isExcludedFromStats = 0
+          AND t.localDateKey BETWEEN :startKey AND :endKey
+          AND (:mainCategoryId IS NULL
+               OR c.id = :mainCategoryId
+               OR c.parentId = :mainCategoryId)
         GROUP BY monthKey
         ORDER BY monthKey ASC
         """
@@ -171,6 +196,7 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
+        mainCategoryId: Long?,
     ): Flow<List<MonthTotal>>
 
     @Query("SELECT * FROM txn WHERE id = :id")

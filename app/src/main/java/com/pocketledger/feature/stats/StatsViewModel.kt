@@ -47,6 +47,17 @@ data class CategoryRank(
     val share: Float,
 )
 
+/**
+ * Whether the donut shows leaf categories or their 大类.
+ *
+ * Both answer real questions -- "what exactly did I buy" versus "which area of life
+ * took the money" -- so it is a toggle rather than a fixed choice.
+ */
+enum class PieLevel(val label: String) {
+    SMALL("小类"),
+    LARGE("大类"),
+}
+
 data class StatsUiState(
     val mode: StatsRangeMode = StatsRangeMode.MONTH,
     val monthKey: String = DateKeys.monthKey(LocalDate.now()),
@@ -60,6 +71,10 @@ data class StatsUiState(
     /** Top wedges plus an aggregated 「其他」; what the donut draws. */
     val donutSlices: List<CategoryRank> = emptyList(),
     val months: List<MonthTotal> = emptyList(),
+    val pieLevel: PieLevel = PieLevel.SMALL,
+    /** Top-level categories offered as a filter. */
+    val filterOptions: List<CategoryEntity> = emptyList(),
+    val filterMainCategoryId: Long? = null,
 ) {
     val hasExpense: Boolean get() = totals.expenseCents > 0L
 
@@ -73,6 +88,17 @@ internal data class StatsSelection(
     val monthKey: String,
     val termId: Long?,
     val terms: List<TermEntity>,
+    val pieLevel: PieLevel,
+    val filterMainCategoryId: Long?,
+)
+
+/** The user-controlled inputs, folded together before being paired with the term list. */
+private data class SelectionKey(
+    val mode: StatsRangeMode,
+    val monthKey: String,
+    val termId: Long?,
+    val pieLevel: PieLevel,
+    val filterMainCategoryId: Long?,
 )
 
 private const val TREND_MONTHS = 6
@@ -92,14 +118,25 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
     private val mode = MutableStateFlow(StatsRangeMode.MONTH)
     private val monthKey = MutableStateFlow(DateKeys.monthKey(LocalDate.now()))
     private val selectedTermId = MutableStateFlow<Long?>(null)
+    private val pieLevel = MutableStateFlow(PieLevel.SMALL)
+    private val filterMainCategoryId = MutableStateFlow<Long?>(null)
 
+    // Five selection inputs plus the term list would exceed combine's typed overloads,
+    // so the selection is folded together first and then paired with the terms.
     val uiState: StateFlow<StatsUiState> = combine(
-        mode,
-        monthKey,
-        selectedTermId,
+        combine(mode, monthKey, selectedTermId, pieLevel, filterMainCategoryId) { m, k, t, pie, filter ->
+            SelectionKey(m, k, t, pie, filter)
+        },
         repository.observeTerms(),
-    ) { currentMode, currentMonth, termId, terms ->
-        StatsSelection(currentMode, currentMonth, termId, terms)
+    ) { key, terms ->
+        StatsSelection(
+            mode = key.mode,
+            monthKey = key.monthKey,
+            termId = key.termId,
+            terms = terms,
+            pieLevel = key.pieLevel,
+            filterMainCategoryId = key.filterMainCategoryId,
+        )
     }.flatMapLatest { selection ->
         val today = LocalDate.now()
         val (startKey, endKey, label) = resolveRange(selection, today)
@@ -110,12 +147,20 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
             .toString()
 
         combine(
-            repository.observeTotals(startKey, endKey),
-            repository.observeCategoryTotals(startKey, endKey),
-            repository.observeMonthTotals(trendStart, endKey),
+            repository.observeTotals(startKey, endKey, selection.filterMainCategoryId),
+            repository.observeCategoryTotals(startKey, endKey, selection.filterMainCategoryId),
+            repository.observeMainCategoryTotals(startKey, endKey, selection.filterMainCategoryId),
+            repository.observeMonthTotals(trendStart, endKey, selection.filterMainCategoryId),
             repository.observeCategories(CategoryKind.EXPENSE),
-        ) { totals, categoryTotals, months, categories ->
-            val ranking = buildRanking(categoryTotals, categories, totals.expenseCents, RANKING_SIZE)
+        ) { totals, categoryTotals, mainTotals, months, categories ->
+            // The 大类 view reuses the leaf ranking machinery by projecting the
+            // roll-up onto the same shape.
+            val source = if (selection.pieLevel == PieLevel.LARGE) {
+                mainTotals.map { CategoryTotal(it.mainCategoryId, it.totalCents) }
+            } else {
+                categoryTotals
+            }
+            val ranking = buildRanking(source, categories, totals.expenseCents, RANKING_SIZE)
             StatsUiState(
                 mode = selection.mode,
                 monthKey = selection.monthKey,
@@ -128,6 +173,9 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
                 topCategories = ranking,
                 donutSlices = collapseTail(ranking, totals.expenseCents),
                 months = months,
+                pieLevel = selection.pieLevel,
+                filterOptions = categories.filter { it.parentId == null }.sortedBy { it.sortOrder },
+                filterMainCategoryId = selection.filterMainCategoryId,
             )
         }
     }.stateIn(
@@ -143,6 +191,15 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     fun selectTerm(id: Long) {
         selectedTermId.value = id
+    }
+
+    fun setPieLevel(level: PieLevel) {
+        pieLevel.value = level
+    }
+
+    /** [mainCategoryId] null clears the filter. */
+    fun setFilter(mainCategoryId: Long?) {
+        filterMainCategoryId.value = mainCategoryId
     }
 
     fun previousMonth() {

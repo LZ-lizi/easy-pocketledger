@@ -185,33 +185,43 @@ class LedgerRepository(
 
     fun observeTotals(monthKey: String): Flow<PeriodTotals> {
         val (start, end) = DateKeys.monthRange(monthKey)
-        return scoped { txnDao.observeTotals(it, start, end) }
+        return scoped { txnDao.observeTotals(it, start, end, null) }
     }
 
-    fun observeTotals(startDateKey: String, endDateKey: String): Flow<PeriodTotals> {
+    /**
+     * [mainCategoryId] narrows every figure on the statistics page to one 大类; null
+     * means "everything".
+     */
+    fun observeTotals(
+        startDateKey: String,
+        endDateKey: String,
+        mainCategoryId: Long? = null,
+    ): Flow<PeriodTotals> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeTotals(it, start, end) }
+        return scoped { txnDao.observeTotals(it, start, end, mainCategoryId) }
     }
 
     fun observeMainCategoryTotals(monthKey: String): Flow<List<MainCategoryTotal>> {
         val (start, end) = DateKeys.monthRange(monthKey)
-        return scoped { txnDao.observeMainCategoryTotals(it, start, end) }
+        return scoped { txnDao.observeMainCategoryTotals(it, start, end, null) }
     }
 
     fun observeMainCategoryTotals(
         startDateKey: String,
         endDateKey: String,
+        mainCategoryId: Long? = null,
     ): Flow<List<MainCategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeMainCategoryTotals(it, start, end) }
+        return scoped { txnDao.observeMainCategoryTotals(it, start, end, mainCategoryId) }
     }
 
     fun observeCategoryTotals(
         startDateKey: String,
         endDateKey: String,
+        mainCategoryId: Long? = null,
     ): Flow<List<CategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeCategoryTotals(it, start, end) }
+        return scoped { txnDao.observeCategoryTotals(it, start, end, mainCategoryId) }
     }
 
     fun observeDayTotals(monthKey: String): Flow<List<DayTotal>> {
@@ -219,9 +229,13 @@ class LedgerRepository(
         return scoped { txnDao.observeDayTotals(it, start, end) }
     }
 
-    fun observeMonthTotals(startDateKey: String, endDateKey: String): Flow<List<MonthTotal>> {
+    fun observeMonthTotals(
+        startDateKey: String,
+        endDateKey: String,
+        mainCategoryId: Long? = null,
+    ): Flow<List<MonthTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeMonthTotals(it, start, end) }
+        return scoped { txnDao.observeMonthTotals(it, start, end, mainCategoryId) }
     }
 
     suspend fun transaction(id: Long): TxnEntity? = txnDao.byId(id)

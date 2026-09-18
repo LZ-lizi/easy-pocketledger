@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.ChartSlice
 import com.pocketledger.ui.components.DonutChart
@@ -58,26 +59,25 @@ fun StatsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "统计",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = state.rangeLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Text(
+                text = "统计",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
 
         item(key = "mode") {
             ModeChips(mode = state.mode, onSelect = viewModel::setMode)
+        }
+
+        if (state.filterOptions.isNotEmpty()) {
+            item(key = "filter") {
+                CategoryFilterRow(
+                    options = state.filterOptions,
+                    selectedId = state.filterMainCategoryId,
+                    onSelect = viewModel::setFilter,
+                )
+            }
         }
 
         when (state.mode) {
@@ -99,7 +99,7 @@ fun StatsScreen(
         item(key = "totals") { TotalsCard(state) }
 
         if (state.hasExpense && state.donutSlices.isNotEmpty()) {
-            item(key = "donut") { DonutCard(state) }
+            item(key = "donut") { DonutCard(state = state, onPieLevel = viewModel::setPieLevel) }
         }
 
         if (state.months.isNotEmpty()) {
@@ -126,6 +126,53 @@ fun StatsScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Narrows the whole page to one 大类.
+ *
+ * A leaf inherits its parent in the query, so picking 餐饮 also counts 外卖 and 早餐
+ * without the user having to think about the hierarchy.
+ */
+@Composable
+private fun CategoryFilterRow(
+    options: List<CategoryEntity>,
+    selectedId: Long?,
+    onSelect: (Long?) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip("全部", selectedId == null) { onSelect(null) }
+        options.forEach { option ->
+            FilterChip(option.name, selectedId == option.id) { onSelect(option.id) }
+        }
+    }
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceContainer
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }
 
@@ -308,18 +355,51 @@ private fun LabelledAmount(label: String, cents: Long, accent: Color) {
  * the same identity here, in the ledger list and on the entry keypad.
  */
 @Composable
-private fun DonutCard(state: StatsUiState) {
+private fun DonutCard(state: StatsUiState, onPieLevel: (PieLevel) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(18.dp)) {
-            Text(
-                text = "支出构成",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "支出构成",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.weight(1f))
+                // Only the pie offers this: the ranking below stays on leaves either way.
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainer),
+                ) {
+                    PieLevel.entries.forEach { level ->
+                        val selected = level == state.pieLevel
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent
+                                )
+                                .clickable { onPieLevel(level) }
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
+                        ) {
+                            Text(
+                                text = level.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             Box(

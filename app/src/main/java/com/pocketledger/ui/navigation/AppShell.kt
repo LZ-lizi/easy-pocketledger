@@ -28,6 +28,8 @@ import com.pocketledger.feature.accounts.AccountsScreen
 import com.pocketledger.feature.accounts.AccountsViewModel
 import com.pocketledger.feature.categories.CategorySettingsScreen
 import com.pocketledger.feature.categories.CategorySettingsViewModel
+import com.pocketledger.feature.detail.DetailScreen
+import com.pocketledger.feature.detail.DetailViewModel
 import com.pocketledger.feature.edit.EditScreen
 import com.pocketledger.feature.edit.EditViewModel
 import com.pocketledger.feature.entry.EntryScreen
@@ -57,12 +59,16 @@ object Routes {
     const val ENTRY = "entry"
     const val EDIT = "edit"
     const val EDIT_ARG = "txnId"
+    const val DETAIL = "detail"
+    const val DETAIL_ARG = "txnId"
     const val TERMS = "terms"
     const val LEDGERS = "ledgers"
     const val CATEGORIES = "categories"
     const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
+
+    fun detail(transactionId: Long): String = "$DETAIL/$transactionId"
 }
 
 private class TabItem(val route: String, val label: String, val icon: LedgerIcon)
@@ -75,6 +81,10 @@ private val TABS = listOf(
 )
 
 private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"
+private val DETAIL_ROUTE = "${Routes.DETAIL}/{${Routes.DETAIL_ARG}}"
+
+/** Routes that take the whole window, with no bottom bar and no FAB. */
+private val FULL_SCREEN_ROUTES = setOf(Routes.ENTRY, EDIT_ROUTE, DETAIL_ROUTE)
 
 /**
  * The application shell.
@@ -123,7 +133,7 @@ private fun LedgerNavHost() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val isOverlay = currentRoute == Routes.ENTRY || currentRoute == EDIT_ROUTE
+    val isOverlay = currentRoute in FULL_SCREEN_ROUTES
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -166,7 +176,7 @@ private fun LedgerNavHost() {
                 HomeScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
-                    onOpenTransaction = { id -> navController.navigate(Routes.edit(id)) },
+                    onOpenTransaction = { id -> navController.navigate(Routes.detail(id)) },
                 )
             }
 
@@ -233,6 +243,21 @@ private fun LedgerNavHost() {
                     viewModel = viewModel,
                     onClose = { navController.popBackStack() },
                     modifier = Modifier.padding(padding),
+                )
+            }
+
+            composable(
+                route = DETAIL_ROUTE,
+                arguments = listOf(navArgument(Routes.DETAIL_ARG) { type = NavType.LongType }),
+            ) { entry ->
+                val transactionId = entry.arguments?.getLong(Routes.DETAIL_ARG) ?: 0L
+                val viewModel: DetailViewModel =
+                    viewModel(factory = DetailViewModel.factory(transactionId))
+                DetailScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                    onEdit = { id -> navController.navigate(Routes.edit(id)) },
                 )
             }
 
