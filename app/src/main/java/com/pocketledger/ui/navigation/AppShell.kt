@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -76,11 +81,15 @@ object Routes {
     const val CATEGORIES = "categories"
     const val INSTALLMENTS = "installments"
     const val BUDGET = "budget"
+    const val BUDGET_ARG = "ledgerId"
     const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
 
     fun detail(transactionId: Long): String = "$DETAIL/$transactionId"
+
+    /** Budgets belong to one ledger, so the route names it explicitly. */
+    fun budget(ledgerId: Long): String = "$BUDGET/$ledgerId"
 }
 
 private class TabItem(val route: String, val label: String, val icon: LedgerIcon)
@@ -94,6 +103,10 @@ private val TABS = listOf(
 
 private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"
 private val DETAIL_ROUTE = "${Routes.DETAIL}/{${Routes.DETAIL_ARG}}"
+private val BUDGET_ROUTE = "${Routes.BUDGET}/{${Routes.BUDGET_ARG}}"
+
+/** Milliseconds for the screen enter/exit slides. Tuned to feel immediate. */
+private const val TRANSITION_MS = 150
 
 /** Routes that take the whole window, with no bottom bar and no FAB. */
 private val FULL_SCREEN_ROUTES = setOf(Routes.ENTRY, EDIT_ROUTE, DETAIL_ROUTE)
@@ -171,7 +184,10 @@ private fun LedgerNavHost() {
                         // Keep each tab's own state and avoid stacking duplicates.
                         popUpTo(Routes.LEDGER) { saveState = true }
                         launchSingleTop = true
-                        restoreState = true
+                        // Settings always reopens at its top level: coming back to a
+                        // sub-page you left earlier is disorienting when you tapped the
+                        // tab expecting the menu.
+                        restoreState = target != Routes.SETTINGS
                     }
                 }
             }
@@ -196,6 +212,22 @@ private fun LedgerNavHost() {
         NavHost(
             navController = navController,
             startDestination = Routes.LEDGER,
+            // Short, uniform transitions. The defaults are long enough to feel like
+            // waiting when moving between tabs you already know.
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it / 8 },
+                    animationSpec = tween(TRANSITION_MS),
+                ) + fadeIn(tween(TRANSITION_MS))
+            },
+            exitTransition = { fadeOut(tween(TRANSITION_MS / 2)) },
+            popEnterTransition = { fadeIn(tween(TRANSITION_MS / 2)) },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it / 8 },
+                    animationSpec = tween(TRANSITION_MS),
+                ) + fadeOut(tween(TRANSITION_MS))
+            },
         ) {
             composable(Routes.LEDGER) {
                 val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
@@ -222,7 +254,6 @@ private fun LedgerNavHost() {
                     onOpenLedgers = { navController.navigate(Routes.LEDGERS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenInstallments = { navController.navigate(Routes.INSTALLMENTS) },
-                    onOpenBudget = { navController.navigate(Routes.BUDGET) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
                 )
@@ -235,6 +266,7 @@ private fun LedgerNavHost() {
                     viewModel = viewModel,
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },
+                    onOpenBudget = { id -> navController.navigate(Routes.budget(id)) },
                 )
             }
 
@@ -258,8 +290,12 @@ private fun LedgerNavHost() {
                 )
             }
 
-            composable(Routes.BUDGET) {
-                val viewModel: BudgetViewModel = viewModel(factory = BudgetViewModel.Factory)
+            composable(
+                route = BUDGET_ROUTE,
+                arguments = listOf(navArgument(Routes.BUDGET_ARG) { type = NavType.LongType }),
+            ) { entry ->
+                val ledgerId = entry.arguments?.getLong(Routes.BUDGET_ARG) ?: 0L
+                val viewModel: BudgetViewModel = viewModel(factory = BudgetViewModel.factory(ledgerId))
                 BudgetSettingsScreen(
                     viewModel = viewModel,
                     contentPadding = padding,

@@ -9,6 +9,7 @@ import com.pocketledger.LedgerApp
 import com.pocketledger.data.dao.DayTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.TxnRow
+import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.repo.LedgerRepository
@@ -50,6 +51,11 @@ data class HomeUiState(
     val allowanceDialogVisible: Boolean = false,
     /** 累计模式 ledgers show running totals instead of an allowance. */
     val ledgerType: LedgerType = LedgerType.BUDGET,
+    val ledgerName: String = "",
+    val selectedLedgerId: Long? = null,
+    /** Offered by the top-right switcher. */
+    val ledgers: List<LedgerEntity> = emptyList(),
+    val ledgerSwitcherVisible: Boolean = false,
 ) {
     val isLoading: Boolean get() = allowance == null
 
@@ -77,21 +83,36 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
     private val allowanceDialog = MutableStateFlow(false)
     private val viewMode = MutableStateFlow(HomeViewMode.LIST)
     private val selectedDateKey = MutableStateFlow<String?>(null)
+    private val ledgerSwitcher = MutableStateFlow(false)
+
+    /** Folds the three small view flags so `combine` stays within its typed overloads. */
+    private data class ViewState(
+        val dialogVisible: Boolean,
+        val viewMode: HomeViewMode,
+        val selectedDateKey: String?,
+    )
 
     val uiState: StateFlow<HomeUiState> = combine(
         monthKey.flatMapLatest { key -> monthStream(key) },
-        allowanceDialog,
-        viewMode,
-        selectedDateKey,
-        repository.observeSelectedLedger(),
-    ) { state, dialogVisible, mode, selected, ledger ->
+        combine(allowanceDialog, viewMode, selectedDateKey) { dialog, mode, selected ->
+            ViewState(dialog, mode, selected)
+        },
+        repository.observeLedgers(),
+        repository.selectedLedgerId,
+        ledgerSwitcher,
+    ) { state, view, ledgers, selectedId, switcherVisible ->
+        val current = ledgers.firstOrNull { it.id == selectedId }
         state.copy(
-            allowanceDialogVisible = dialogVisible,
-            viewMode = mode,
-            selectedDateKey = selected,
+            allowanceDialogVisible = view.dialogVisible,
+            viewMode = view.viewMode,
+            selectedDateKey = view.selectedDateKey,
             // A ledger deleted out from under the screen falls back to 预算模式, which
             // is the more informative layout rather than the emptier one.
-            ledgerType = ledger?.type ?: LedgerType.BUDGET,
+            ledgerType = current?.type ?: LedgerType.BUDGET,
+            ledgerName = current?.name.orEmpty(),
+            selectedLedgerId = selectedId,
+            ledgers = ledgers,
+            ledgerSwitcherVisible = switcherVisible,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -152,6 +173,19 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     fun selectDay(dateKey: String?) {
         selectedDateKey.value = dateKey
+    }
+
+    fun openLedgerSwitcher() {
+        ledgerSwitcher.value = true
+    }
+
+    fun dismissLedgerSwitcher() {
+        ledgerSwitcher.value = false
+    }
+
+    /** Switching is a single repository write; every screen follows it. */
+    fun selectLedger(id: Long) {
+        repository.selectLedger(id)
     }
 
     fun openAllowanceDialog() {

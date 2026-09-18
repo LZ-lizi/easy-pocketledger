@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +47,7 @@ import com.pocketledger.domain.AllowanceSnapshot
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
+import com.pocketledger.ui.components.LedgerSwitcherDialog
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
@@ -67,6 +70,7 @@ fun HomeScreen(
         onToggleView = viewModel::toggleViewMode,
         onSelectDay = viewModel::selectDay,
         onOpenTransaction = onOpenTransaction,
+        onTapLedger = viewModel::openLedgerSwitcher,
         modifier = modifier,
     )
 
@@ -76,6 +80,15 @@ fun HomeScreen(
             currentCents = state.allowance?.budgetCents ?: 0L,
             onDismiss = viewModel::dismissAllowanceDialog,
             onConfirm = viewModel::saveAllowance,
+        )
+    }
+
+    if (state.ledgerSwitcherVisible) {
+        LedgerSwitcherDialog(
+            ledgers = state.ledgers,
+            selectedId = state.selectedLedgerId,
+            onSelect = viewModel::selectLedger,
+            onDismiss = viewModel::dismissLedgerSwitcher,
         )
     }
 }
@@ -90,6 +103,7 @@ private fun HomeContent(
     onToggleView: () -> Unit,
     onSelectDay: (String?) -> Unit,
     onOpenTransaction: (Long) -> Unit,
+    onTapLedger: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -107,9 +121,11 @@ private fun HomeContent(
                 label = state.monthLabel,
                 isCurrentMonth = state.isCurrentMonth,
                 viewMode = state.viewMode,
+                ledgerName = state.ledgerName,
                 onPrevious = onPreviousMonth,
                 onNext = onNextMonth,
                 onToggleView = onToggleView,
+                onTapLedger = onTapLedger,
             )
         }
 
@@ -196,9 +212,11 @@ private fun MonthSwitcher(
     label: String,
     isCurrentMonth: Boolean,
     viewMode: HomeViewMode,
+    ledgerName: String,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToggleView: () -> Unit,
+    onTapLedger: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -206,39 +224,66 @@ private fun MonthSwitcher(
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The calendar toggle sits on the left so the date stepper below owns the
+        // centre, where the eye already is.
+        ViewToggle(viewMode = viewMode, onToggle = onToggleView)
+
+        Spacer(Modifier.weight(1f))
         StepButton(symbol = "‹", onClick = onPrevious)
+        // Fixed width and centred: the two arrows stay equidistant from the date
+        // regardless of how long the label is.
         Text(
             text = label,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 8.dp),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.width(MONTH_LABEL_WIDTH),
         )
-        if (!isCurrentMonth) {
-            Text(
-                text = "回到本月",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clickable(onClick = onNext)
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-            )
-        }
-        Spacer(Modifier.weight(1f))
         StepButton(symbol = "›", onClick = onNext)
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .clickable(onClick = onToggleView)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-        ) {
-            Text(
-                text = if (viewMode == HomeViewMode.CALENDAR) "列表" else "日历",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        Spacer(Modifier.weight(1f))
+
+        LedgerChip(name = ledgerName, onClick = onTapLedger)
+    }
+}
+
+private val MONTH_LABEL_WIDTH = 104.dp
+
+@Composable
+private fun ViewToggle(viewMode: HomeViewMode, onToggle: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onToggle),
+        contentAlignment = Alignment.Center,
+    ) {
+        LedgerIconView(
+            icon = if (viewMode == HomeViewMode.CALENDAR) LedgerIcon.LIST else LedgerIcon.CHART,
+            tint = MaterialTheme.colorScheme.primary,
+            size = 18.dp,
+        )
+    }
+}
+
+@Composable
+private fun LedgerChip(name: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = name.ifBlank { "账本" },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 84.dp),
+        )
     }
 }
 

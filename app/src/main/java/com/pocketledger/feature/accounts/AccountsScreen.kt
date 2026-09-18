@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -28,12 +29,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountType
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
+import com.pocketledger.ui.components.LedgerSwitcherDialog
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 
@@ -75,17 +78,65 @@ fun AccountsScreen(
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable { viewModel.createAccount() }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clickable { viewModel.openLedgerSwitcher() }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
                 ) {
                     Text(
-                        text = "添加",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        text = state.ledgerName.ifBlank { "账本" },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 84.dp),
                     )
                 }
+                if (!state.accountsUnsupported) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable { viewModel.createAccount() }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            text = "添加",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
             }
+        }
+
+        if (state.accountsUnsupported) {
+            // A 累计模式 ledger has no accounts by design, so the page says so rather
+            // than offering a button that would create something it cannot use.
+            item(key = "unsupported") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            text = "当前账本是累计模式",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "累计模式只记录收支，不涉及账户。需要账户和余额，请切换到预算模式账本。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            return@LazyColumn
         }
 
         item(key = "networth") { NetWorthCard(state) }
@@ -112,6 +163,15 @@ fun AccountsScreen(
             onDismiss = viewModel::dismissEditor,
             onSave = viewModel::saveAccount,
             onArchive = viewModel::toggleArchive,
+        )
+    }
+
+    if (state.ledgerSwitcherVisible) {
+        LedgerSwitcherDialog(
+            ledgers = state.ledgers,
+            selectedId = state.selectedLedgerId,
+            onSelect = viewModel::selectLedger,
+            onDismiss = viewModel::dismissLedgerSwitcher,
         )
     }
 }

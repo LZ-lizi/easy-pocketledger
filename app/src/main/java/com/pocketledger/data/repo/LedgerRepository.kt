@@ -351,7 +351,58 @@ class LedgerRepository(
 
     /** Setting zero clears the cap rather than storing a meaningless zero. */
     suspend fun setBudget(periodKey: String, categoryId: Long, amountCents: Long) {
-        val ledgerId = writeLedgerId()
+        setBudgetFor(writeLedgerId(), periodKey, categoryId, amountCents)
+    }
+
+    // ------------------------------------------------- budgets for one named ledger
+
+    /**
+     * Budget and spending aggregates for a specific ledger, regardless of which one
+     * is selected.
+     *
+     * Budgets are configured from the ledger management page, where the whole point
+     * is to set up a ledger other than the one currently open -- so those calls cannot
+     * go through the "selected ledger" indirection.
+     */
+    fun observeBudgetsFor(ledgerId: Long, periodKey: String): Flow<List<BudgetWithName>> =
+        budgetDao.observeForPeriodWithNames(ledgerId, BudgetPeriodType.MONTH, periodKey)
+
+    fun observeTotalsFor(
+        ledgerId: Long,
+        startDateKey: String,
+        endDateKey: String,
+    ): Flow<PeriodTotals> {
+        val (start, end) = DateKeys.range(startDateKey, endDateKey)
+        return txnDao.observeTotals(ledgerId, start, end, null)
+    }
+
+    fun observeMainCategoryTotalsFor(
+        ledgerId: Long,
+        startDateKey: String,
+        endDateKey: String,
+    ): Flow<List<MainCategoryTotal>> {
+        val (start, end) = DateKeys.range(startDateKey, endDateKey)
+        return txnDao.observeMainCategoryTotals(ledgerId, start, end, null)
+    }
+
+    fun observeCategoryTotalsFor(
+        ledgerId: Long,
+        startDateKey: String,
+        endDateKey: String,
+    ): Flow<List<CategoryTotal>> {
+        val (start, end) = DateKeys.range(startDateKey, endDateKey)
+        return txnDao.observeCategoryTotals(ledgerId, start, end, null)
+    }
+
+    fun observeCategoriesFor(ledgerId: Long, kind: CategoryKind): Flow<List<CategoryEntity>> =
+        categoryDao.observeByKind(ledgerId, kind)
+
+    suspend fun setBudgetFor(
+        ledgerId: Long,
+        periodKey: String,
+        categoryId: Long,
+        amountCents: Long,
+    ) {
         if (amountCents <= 0L) {
             budgetDao.delete(ledgerId, BudgetPeriodType.MONTH, periodKey, categoryId)
         } else {

@@ -8,6 +8,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AccountType
+import com.pocketledger.data.entity.LedgerEntity
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.repo.LedgerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,8 +32,16 @@ data class AccountsUiState(
     val editorVisible: Boolean = false,
     /** Null while creating a new account. */
     val editorTarget: AccountEntity? = null,
+    val ledgerName: String = "",
+    val ledgerType: LedgerType = LedgerType.BUDGET,
+    val selectedLedgerId: Long? = null,
+    val ledgers: List<LedgerEntity> = emptyList(),
+    val ledgerSwitcherVisible: Boolean = false,
 ) {
     val netWorthCents: Long get() = assetsCents - liabilitiesCents
+
+    /** 累计模式 ledgers do not track accounts at all. */
+    val accountsUnsupported: Boolean get() = ledgerType == LedgerType.ACCUMULATE
 }
 
 private data class EditorState(val target: AccountEntity?)
@@ -39,12 +49,17 @@ private data class EditorState(val target: AccountEntity?)
 class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() {
 
     private val editor = MutableStateFlow<EditorState?>(null)
+    private val ledgerSwitcher = MutableStateFlow(false)
 
     val uiState: StateFlow<AccountsUiState> = combine(
         repository.observeAllAccounts(),
         repository.observeBalances(),
         editor,
-    ) { accounts, balances, editorState ->
+        repository.observeLedgers(),
+        combine(repository.selectedLedgerId, ledgerSwitcher) { id, visible -> id to visible },
+    ) { accounts, balances, editorState, ledgers, selection ->
+        val (selectedId, switcherVisible) = selection
+        val current = ledgers.firstOrNull { it.id == selectedId }
         val balanceById = balances.associate { it.accountId to it.balanceCents }
 
         // Archived accounts stay visible (muted, sorted last) so they can be
@@ -73,6 +88,11 @@ class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() 
             liabilitiesCents = liabilities,
             editorVisible = editorState != null,
             editorTarget = editorState?.target,
+            ledgerName = current?.name.orEmpty(),
+            ledgerType = current?.type ?: LedgerType.BUDGET,
+            selectedLedgerId = selectedId,
+            ledgers = ledgers,
+            ledgerSwitcherVisible = switcherVisible,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -109,6 +129,19 @@ class AccountsViewModel(private val repository: LedgerRepository) : ViewModel() 
             repository.setAccountArchived(account.id, !account.isArchived)
             editor.value = null
         }
+    }
+
+    fun openLedgerSwitcher() {
+        ledgerSwitcher.value = true
+    }
+
+    fun dismissLedgerSwitcher() {
+        ledgerSwitcher.value = false
+    }
+
+    /** Switching is a single repository write; every screen follows it. */
+    fun selectLedger(id: Long) {
+        repository.selectLedger(id)
     }
 
     companion object {

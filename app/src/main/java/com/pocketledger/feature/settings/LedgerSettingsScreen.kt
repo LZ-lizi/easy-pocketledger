@@ -54,6 +54,7 @@ fun LedgerSettingsScreen(
     viewModel: LedgerSettingsViewModel,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    onOpenBudget: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -99,7 +100,8 @@ fun LedgerSettingsScreen(
 
         item(key = "hint") {
             Text(
-                text = "每个账本的收支、账户、预算和统计都是独立的。点一下即可切换。",
+                text = "这里只管理账本本身：新建、改名、归档、设置各自的预算。" +
+                    "要换一个账本看账，用「明细」或「账户」页右上角的账本按钮。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -109,8 +111,8 @@ fun LedgerSettingsScreen(
             LedgerCard(
                 ledger = ledger,
                 selected = ledger.id == state.selectedId,
-                onSelect = { viewModel.select(ledger.id) },
                 onEdit = { viewModel.edit(ledger) },
+                onOpenBudget = onOpenBudget,
             )
         }
     }
@@ -143,19 +145,26 @@ private fun BackChip(onClick: () -> Unit) {
     }
 }
 
+/**
+ * One ledger.
+ *
+ * Tapping opens the editor rather than switching to it: managing books and moving the
+ * app's focus are different intentions, and the earlier version conflated them so a
+ * stray tap silently changed every other screen.
+ */
 @Composable
 private fun LedgerCard(
     ledger: LedgerEntity,
     selected: Boolean,
-    onSelect: () -> Unit,
     onEdit: () -> Unit,
+    onOpenBudget: (Long) -> Unit,
 ) {
     val accent = Color(ledger.colorArgb)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (ledger.isArchived) 0.55f else 1f)
-            .clickable(onClick = onSelect),
+            .clickable(onClick = onEdit),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
@@ -196,10 +205,21 @@ private fun LedgerCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // A 累计模式 ledger has no budgets by design, so it is not offered one.
+            if (ledger.type == LedgerType.BUDGET) {
+                Text(
+                    text = "预算",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { onOpenBudget(ledger.id) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
             Text(
                 text = "编辑",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .clickable(onClick = onEdit)
                     .padding(horizontal = 8.dp, vertical = 4.dp),

@@ -48,6 +48,9 @@ data class BudgetUiState(
     val editorTarget: BudgetRow? = null,
     /** Offered when adding a leaf budget. */
     val leafOptions: List<CategoryEntity> = emptyList(),
+    val ledgerName: String = "",
+    /** True when this ledger is also the one the rest of the app is showing. */
+    val isCurrentLedger: Boolean = true,
 ) {
     val totalSpentCents: Long get() = total?.spentCents ?: 0L
     val totalLimitCents: Long get() = total?.limitCents ?: 0L
@@ -58,14 +61,21 @@ data class BudgetUiState(
 private data class BudgetEditorState(val target: BudgetRow?)
 
 /**
- * Budgets for the current month, at all three levels.
+ * Budgets for one month of one ledger.
  *
- * A 大类 is an ordinary category row, so the same table and the same query serve
- * "the whole month" (`categoryId = 0`), "all of 餐饮" (a top-level id) and "just
- * 外卖" (a leaf id) with no extra concepts.
+ * The ledger is an explicit parameter rather than "whatever is selected": budgets are
+ * configured from the ledger management page, where setting up a ledger other than
+ * the open one is the normal case, and doing so must not move the app's focus.
+ *
+ * A 大类 is an ordinary category row, so the same table and query serve the overall
+ * cap (`categoryId = 0`), a category group's cap (a top-level id) and a single
+ * category's cap (a leaf id) with no extra concepts.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class BudgetViewModel(private val repository: LedgerRepository) : ViewModel() {
+class BudgetViewModel(
+    private val repository: LedgerRepository,
+    private val ledgerId: Long,
+) : ViewModel() {
 
     private val monthKey = MutableStateFlow(DateKeys.monthKey(LocalDate.now()))
     private val editor = MutableStateFlow<BudgetEditorState?>(null)
@@ -73,8 +83,13 @@ class BudgetViewModel(private val repository: LedgerRepository) : ViewModel() {
     val uiState: StateFlow<BudgetUiState> = combine(
         monthKey.flatMapLatest { key -> monthStream(key) },
         editor,
-    ) { state, editorState ->
+        repository.observeLedgers(),
+        repository.selectedLedgerId,
+    ) { state, editorState, ledgers, selectedId ->
+        val ledger = ledgers.firstOrNull { it.id == ledgerId }
         state.copy(
+            ledgerName = ledger?.name.orEmpty(),
+            isCurrentLedger = ledgerId == selectedId,
             editorVisible = editorState != null,
             editorTarget = editorState?.target,
         )
@@ -85,14 +100,19 @@ class BudgetViewModel(private val repository: LedgerRepository) : ViewModel() {
     )
 
     private fun monthStream(key: String) = combine(
-        repository.observeBudgets(key),
-        repository.observeTotals(key),
-        repository.observeMainCategoryTotals(key),
-        repository.observeCategoryTotals(
+        repository.observeBudgetsFor(ledgerId, key),
+        repository.observeTotalsFor(ledgerId, DateKeys.monthRange(key).first, DateKeys.monthRange(key).second),
+        repository.observeMainCategoryTotalsFor(
+            ledgerId,
             DateKeys.monthRange(key).first,
             DateKeys.monthRange(key).second,
         ),
-        repository.observeCategories(CategoryKind.EXPENSE),
+        repository.observeCategoryTotalsFor(
+            ledgerId,
+            DateKeys.monthRange(key).first,
+            DateKeys.monthRange(key).second,
+        ),
+        repository.observeCategoriesFor(ledgerId, CategoryKind.EXPENSE),
     ) { budgets, totals, mainTotals, categoryTotals, categories ->
         val limitByCategory = budgets.associate { it.categoryId to it.amountCents }
         val mainSpent = mainTotals.associate { it.mainCategoryId to it.totalCents }
@@ -172,17 +192,17 @@ class BudgetViewModel(private val repository: LedgerRepository) : ViewModel() {
     fun save(categoryId: Long, amountCents: Long) {
         val key = monthKey.value
         viewModelScope.launch {
-            repository.setBudget(key, categoryId, amountCents)
+            repository.setBudgetFor(ledgerId, key, categoryId, amountCents)
             editor.value = null
         }
     }
 
     companion object {
 
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
+        fun factory(ledgerId: Long): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as LedgerApp
-                BudgetViewModel(app.container.repository)
+                BudgetViewModel(app.container.repository, ledgerId)
             }
         }
     }
