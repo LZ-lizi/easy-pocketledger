@@ -36,6 +36,8 @@ import com.pocketledger.feature.entry.EntryScreen
 import com.pocketledger.feature.entry.EntryViewModel
 import com.pocketledger.feature.home.HomeScreen
 import com.pocketledger.feature.home.HomeViewModel
+import com.pocketledger.feature.installments.InstallmentSettingsScreen
+import com.pocketledger.feature.installments.InstallmentSettingsViewModel
 import com.pocketledger.feature.onboarding.OnboardingScreen
 import com.pocketledger.feature.onboarding.OnboardingViewModel
 import com.pocketledger.feature.settings.AboutScreen
@@ -64,6 +66,7 @@ object Routes {
     const val TERMS = "terms"
     const val LEDGERS = "ledgers"
     const val CATEGORIES = "categories"
+    const val INSTALLMENTS = "installments"
     const val ABOUT = "about"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
@@ -195,6 +198,7 @@ private fun LedgerNavHost() {
                     contentPadding = padding,
                     onOpenLedgers = { navController.navigate(Routes.LEDGERS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
+                    onOpenInstallments = { navController.navigate(Routes.INSTALLMENTS) },
                     onOpenTerms = { navController.navigate(Routes.TERMS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
                 )
@@ -214,6 +218,16 @@ private fun LedgerNavHost() {
                 val viewModel: CategorySettingsViewModel =
                     viewModel(factory = CategorySettingsViewModel.Factory)
                 CategorySettingsScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.INSTALLMENTS) {
+                val viewModel: InstallmentSettingsViewModel =
+                    viewModel(factory = InstallmentSettingsViewModel.Factory)
+                InstallmentSettingsScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },

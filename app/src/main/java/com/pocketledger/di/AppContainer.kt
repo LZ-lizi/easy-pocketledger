@@ -1,6 +1,7 @@
 package com.pocketledger.di
 
 import android.content.Context
+import com.pocketledger.data.InstallmentRunner
 import com.pocketledger.data.LedgerDatabase
 import com.pocketledger.data.Presets
 import com.pocketledger.data.entity.LedgerEntity
@@ -55,10 +56,19 @@ class AppContainer(context: Context) {
     private val _startupComplete = MutableStateFlow(false)
     val startupComplete: StateFlow<Boolean> = _startupComplete.asStateFlow()
 
+    /** Materialises due instalments; also called again after a plan is created. */
+    suspend fun runInstallments(): Int = installmentRunner.run()
+
+    /** Catch-up for instalment plans that fell due while the app was closed. */
+    private val installmentRunner: InstallmentRunner by lazy { InstallmentRunner(repository) }
+
     init {
         appScope.launch {
             adoptPreLedgerDataIfNeeded()
             selectInitialLedger()
+            // Instalments are caught up before startup is declared complete, so the
+            // first frame already includes any charge that came due while closed.
+            runCatching { installmentRunner.run() }
             _startupComplete.value = true
         }
     }

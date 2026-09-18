@@ -11,6 +11,7 @@ import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.MainCategoryTotal
 import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
+import com.pocketledger.data.dao.PlanPaidSummary
 import com.pocketledger.data.dao.TagDao
 import com.pocketledger.data.dao.TermDao
 import com.pocketledger.data.dao.TxnDao
@@ -243,6 +244,16 @@ class LedgerRepository(
     suspend fun addTransaction(txn: TxnEntity): Long =
         txnDao.insert(txn.copy(ledgerId = writeLedgerId()))
 
+    /**
+     * Writes into an explicitly named ledger.
+     *
+     * The instalment catch-up runs across every ledger at startup, so it cannot use
+     * the "currently selected" ledger -- a plan in another ledger would otherwise
+     * post its charge into whichever ledger happens to be open.
+     */
+    suspend fun addTransactionInLedger(ledgerId: Long, txn: TxnEntity): Long =
+        txnDao.insert(txn.copy(ledgerId = ledgerId))
+
     suspend fun addTransactions(txns: List<TxnEntity>): List<Long> {
         val id = writeLedgerId()
         return txnDao.insertAll(txns.map { it.copy(ledgerId = id) })
@@ -378,6 +389,9 @@ class LedgerRepository(
         installmentDao.claimPeriod(periodId, txnId)
 
     suspend fun paidInstallmentCount(planId: Long): Int = installmentDao.paidPeriodCount(planId)
+
+    /** Paid progress for every plan, so the list needs one query rather than N. */
+    fun observePaidSummaries(): Flow<List<PlanPaidSummary>> = installmentDao.observePaidSummaries()
 
     suspend fun deleteInstallmentPeriods(planId: Long) = installmentDao.deletePeriods(planId)
 }

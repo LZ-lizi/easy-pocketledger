@@ -9,6 +9,13 @@ import com.pocketledger.data.entity.InstallmentPeriodEntity
 import com.pocketledger.data.entity.InstallmentPlanEntity
 import kotlinx.coroutines.flow.Flow
 
+/** How far one plan has been paid off: periods settled and the money behind them. */
+data class PlanPaidSummary(
+    val planId: Long,
+    val paidCount: Int,
+    val paidCents: Long,
+)
+
 @Dao
 interface InstallmentDao {
 
@@ -79,6 +86,25 @@ interface InstallmentDao {
 
     @Query("SELECT COUNT(*) FROM installment_period WHERE planId = :planId AND txnId IS NOT NULL")
     suspend fun paidPeriodCount(planId: Long): Int
+
+    /**
+     * Paid progress for every plan at once.
+     *
+     * One aggregate instead of a query per plan: the plan list needs the figures for
+     * all of them at the same time, and N queries for a list that is usually under a
+     * dozen rows is the wrong shape.
+     */
+    @Query(
+        """
+        SELECT planId AS planId,
+               COUNT(*) AS paidCount,
+               COALESCE(SUM(amountCents), 0) AS paidCents
+        FROM installment_period
+        WHERE txnId IS NOT NULL
+        GROUP BY planId
+        """
+    )
+    fun observePaidSummaries(): Flow<List<PlanPaidSummary>>
 
     @Query("DELETE FROM installment_period WHERE planId = :planId")
     suspend fun deletePeriods(planId: Long)

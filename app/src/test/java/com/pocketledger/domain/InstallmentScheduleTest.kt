@@ -67,7 +67,7 @@ class InstallmentScheduleTest {
             startDateKey = "2026-09-05",
             repayDay = 10,
             periodCount = 6,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2026, 9, 9),
             alreadyGenerated = emptySet(),
         )
@@ -80,7 +80,7 @@ class InstallmentScheduleTest {
             startDateKey = "2026-09-05",
             repayDay = 10,
             periodCount = 6,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2026, 11, 15),
             alreadyGenerated = emptySet(),
         )
@@ -95,7 +95,7 @@ class InstallmentScheduleTest {
             startDateKey = "2026-09-05",
             repayDay = 10,
             periodCount = 6,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2026, 11, 15),
             alreadyGenerated = setOf(1, 2),
         )
@@ -108,7 +108,7 @@ class InstallmentScheduleTest {
             startDateKey = "2026-09-05",
             repayDay = 10,
             periodCount = 6,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2027, 6, 1),
             alreadyGenerated = emptySet(),
         )
@@ -119,7 +119,7 @@ class InstallmentScheduleTest {
             startDateKey = "2026-09-05",
             repayDay = 10,
             periodCount = 6,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2027, 6, 1),
             alreadyGenerated = first.map { it.periodIndex }.toSet(),
         )
@@ -132,7 +132,7 @@ class InstallmentScheduleTest {
             startDateKey = "2020-01-01",
             repayDay = 1,
             periodCount = 3,
-            perPeriodCents = 10000,
+            totalCents = 10000,
             today = LocalDate.of(2030, 1, 1),
             alreadyGenerated = emptySet(),
         )

@@ -52,12 +52,15 @@ object InstallmentSchedule {
      * [alreadyGenerated] is the set of period indices already backed by a
      * transaction; passing it in (rather than querying here) keeps this function
      * pure and lets the caller use whatever index it already has.
+     *
+     * Amounts come from [amountForPeriod], so the final instalment absorbs the
+     * rounding remainder and the periods always add up to [totalCents].
      */
     fun pendingPeriods(
         startDateKey: String,
         repayDay: Int,
         periodCount: Int,
-        perPeriodCents: Long,
+        totalCents: Long,
         today: LocalDate,
         alreadyGenerated: Set<Int>,
     ): List<PendingPeriod> =
@@ -68,9 +71,13 @@ object InstallmentSchedule {
                 if (due.isAfter(today)) {
                     null
                 } else {
-                    PendingPeriod(index, due.toString(), perPeriodCents)
+                    PendingPeriod(index, due.toString(), amountForPeriod(totalCents, periodCount, index))
                 }
             }
+
+    /** What one instalment costs, with the remainder landing on the last one. */
+    fun amountForPeriod(totalCents: Long, periodCount: Int, periodIndex: Int): Long =
+        splitEvenly(totalCents, periodCount).getOrNull(periodIndex - 1) ?: 0L
 
     /** How many instalments have come due by [today], regardless of generation. */
     fun elapsedPeriods(startDateKey: String, repayDay: Int, periodCount: Int, today: LocalDate): Int =
