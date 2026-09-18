@@ -22,6 +22,10 @@ interface LedgerDao {
     @Query("SELECT * FROM ledger WHERE id = :id")
     suspend fun byId(id: Long): LedgerEntity?
 
+    /** Reactive read, so a screen follows a rename of the ledger it is showing. */
+    @Query("SELECT * FROM ledger WHERE id = :id")
+    fun observeById(id: Long): Flow<LedgerEntity?>
+
     /** Zero means the database has never been used and onboarding should run. */
     @Query("SELECT COUNT(*) FROM ledger WHERE deletedAt IS NULL")
     suspend fun count(): Int

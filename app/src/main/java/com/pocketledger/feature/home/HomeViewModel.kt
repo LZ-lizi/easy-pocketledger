@@ -9,6 +9,7 @@ import com.pocketledger.LedgerApp
 import com.pocketledger.data.dao.DayTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.TxnRow
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.data.repo.LedgerRepository
 import com.pocketledger.domain.AllowanceCalculator
@@ -47,6 +48,8 @@ data class HomeUiState(
     val viewMode: HomeViewMode = HomeViewMode.LIST,
     val selectedDateKey: String? = null,
     val allowanceDialogVisible: Boolean = false,
+    /** 累计模式 ledgers show running totals instead of an allowance. */
+    val ledgerType: LedgerType = LedgerType.BUDGET,
 ) {
     val isLoading: Boolean get() = allowance == null
 
@@ -80,11 +83,15 @@ class HomeViewModel(private val repository: LedgerRepository) : ViewModel() {
         allowanceDialog,
         viewMode,
         selectedDateKey,
-    ) { state, dialogVisible, mode, selected ->
+        repository.observeSelectedLedger(),
+    ) { state, dialogVisible, mode, selected, ledger ->
         state.copy(
             allowanceDialogVisible = dialogVisible,
             viewMode = mode,
             selectedDateKey = selected,
+            // A ledger deleted out from under the screen falls back to 预算模式, which
+            // is the more informative layout rather than the emptier one.
+            ledgerType = ledger?.type ?: LedgerType.BUDGET,
         )
     }.stateIn(
         scope = viewModelScope,

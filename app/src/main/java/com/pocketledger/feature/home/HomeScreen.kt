@@ -37,7 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.TxnRow
+import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.AllowanceSnapshot
 import com.pocketledger.domain.Money
@@ -110,11 +112,21 @@ private fun HomeContent(
         }
 
         item(key = "allowance") {
-            AllowanceCard(
-                allowance = state.allowance,
-                monthLabel = state.monthLabel,
-                onClick = onTapAllowance,
-            )
+            // A 累计模式 ledger has no accounts and no allowance, so it gets a running
+            // total instead. Showing an allowance card there would invite the user to
+            // configure something the ledger type cannot use.
+            if (state.ledgerType == LedgerType.ACCUMULATE) {
+                RunningTotalCard(
+                    totals = state.totals,
+                    monthLabel = state.monthLabel,
+                )
+            } else {
+                AllowanceCard(
+                    allowance = state.allowance,
+                    monthLabel = state.monthLabel,
+                    onClick = onTapAllowance,
+                )
+            }
         }
 
         if (state.viewMode == HomeViewMode.CALENDAR) {
@@ -364,6 +376,71 @@ private fun secondaryLine(allowance: AllowanceSnapshot): String = when {
     allowance.isOverBudget -> "已超出 ${Money.formatWithSymbol(-allowance.remainingCents)}"
     allowance.daysRemaining <= 0 -> "本月已结束"
     else -> "日均 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"
+}
+
+/**
+ * The 累计模式 home card: what came in, what went out, what is left over.
+ *
+ * Deliberately not a budget view. A ledger tracking a running total has no monthly
+ * allowance by design, and inventing one here would contradict the mode the user
+ * chose when creating it.
+ */
+@Composable
+private fun RunningTotalCard(totals: PeriodTotals, monthLabel: String) {
+    val ledger = LedgerTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainer),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(
+                text = "$monthLabel 累计",
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = Money.formatWithSymbol(totals.netCents),
+                style = MoneyTextStyles.Hero,
+                color = if (totals.netCents < 0L) ledger.expense else scheme.onSurface,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "结余",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column {
+                    Text(
+                        text = "收入",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = Money.formatWithSymbol(totals.incomeCents),
+                        style = MoneyTextStyles.Medium,
+                        color = ledger.income,
+                    )
+                }
+                Column {
+                    Text(
+                        text = "支出",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = Money.formatWithSymbol(totals.expenseCents),
+                        style = MoneyTextStyles.Medium,
+                        color = ledger.expense,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

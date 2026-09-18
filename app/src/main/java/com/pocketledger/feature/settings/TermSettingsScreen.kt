@@ -97,8 +97,7 @@ fun TermSettingsScreen(
 
         item(key = "explain") {
             Text(
-                text = "统计页的「学期」用这里的日期区间算总账。" +
-                    "比如填 2026-09-01 到 2027-01-15，就能看到整个秋季学期花了多少。",
+                text = "统计页的「学期」按这里的日期区间汇总。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

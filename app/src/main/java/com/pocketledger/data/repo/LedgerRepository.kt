@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Single entry point to the data layer.
@@ -98,6 +99,17 @@ class LedgerRepository(
     suspend fun activeLedgers(): List<LedgerEntity> = ledgerDao.active()
 
     suspend fun ledger(id: Long): LedgerEntity? = ledgerDao.byId(id)
+
+    /**
+     * The ledger currently being shown, reactively.
+     *
+     * Screens need its *type*, not just its id: a 累计模式 ledger has no accounts and
+     * no allowance, so the home screen renders a different card entirely.
+     */
+    fun observeSelectedLedger(): Flow<LedgerEntity?> =
+        selectedLedgerId.flatMapLatest { id ->
+            if (id == null) flowOf(null) else ledgerDao.observeById(id)
+        }
 
     suspend fun ledgerCount(): Int = ledgerDao.count()
 
