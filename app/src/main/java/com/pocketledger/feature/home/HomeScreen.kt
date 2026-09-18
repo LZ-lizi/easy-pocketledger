@@ -43,6 +43,8 @@ import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.AllowanceSnapshot
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
@@ -505,7 +507,8 @@ private fun TransactionRowItem(row: TxnRow, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CategoryBadge(
-                label = title,
+                iconKey = row.categoryIconKey,
+                fallback = title,
                 color = accent,
                 muted = row.isExcludedFromStats,
             )
@@ -557,14 +560,19 @@ private fun TransactionRowItem(row: TxnRow, onClick: () -> Unit) {
 }
 
 /**
- * A coloured circle carrying the category's first character.
+ * The category's vector icon on a tinted tile.
  *
- * Chosen over a hand-drawn icon per category: 26 bespoke vectors drawn blind would
- * be far more likely to look broken than a consistent typographic badge, and the
- * category colour already makes rows scannable by habit.
+ * A first-character badge was the earlier placeholder and read poorly: 早/午/晚 and
+ * 水/电/燃 begin with visually similar glyphs, so the list was harder to scan than no
+ * badge at all. Transfers carry no category, so they keep a text fallback.
  */
 @Composable
-private fun CategoryBadge(label: String, color: Color, muted: Boolean) {
+private fun CategoryBadge(
+    iconKey: String?,
+    fallback: String,
+    color: Color,
+    muted: Boolean,
+) {
     val fill = if (muted) MaterialTheme.colorScheme.surfaceContainerHigh else color.copy(alpha = 0.16f)
     val content = if (muted) MaterialTheme.colorScheme.onSurfaceVariant else color
     Box(
@@ -574,12 +582,20 @@ private fun CategoryBadge(label: String, color: Color, muted: Boolean) {
             .background(fill),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label.take(1),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            color = content,
-        )
+        if (iconKey == null) {
+            Text(
+                text = fallback.take(1),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = content,
+            )
+        } else {
+            LedgerIconView(
+                icon = LedgerIcon.forKey(iconKey),
+                tint = content,
+                size = 20.dp,
+            )
+        }
     }
 }
 

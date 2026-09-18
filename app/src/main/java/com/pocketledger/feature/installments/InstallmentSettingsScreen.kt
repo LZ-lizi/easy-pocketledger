@@ -83,7 +83,7 @@ fun InstallmentSettingsScreen(
                 BackChip(onBack)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "月付/白条",
+                    text = "月付",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -186,7 +186,7 @@ private fun PlanCard(row: InstallmentPlanRow, onClick: () -> Unit) {
                 )
                 Text(
                     text = buildString {
-                        append(installmentKindLabel(plan.kind))
+                        append("每月 ${plan.repayDay} 日")
                         if (!plan.isActive) append(" · 已终止")
                     },
                     style = MaterialTheme.typography.labelSmall,
@@ -275,11 +275,13 @@ private fun InstallmentEditorDialog(
 ) {
     val today = remember { LocalDate.now() }
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
-    var kind by remember { mutableStateOf(existing?.kind ?: InstallmentKind.MONTHLY) }
     var totalInput by remember {
         mutableStateOf(
             existing?.totalAmountCents?.let { Money.formatCompact(it) }.orEmpty()
         )
+    }
+    var feeInput by remember {
+        mutableStateOf(existing?.feeCents?.takeIf { it > 0L }?.let { Money.formatCompact(it) }.orEmpty())
     }
     var periodCountInput by remember {
         mutableStateOf(existing?.periodCount?.toString() ?: "1")
@@ -294,12 +296,14 @@ private fun InstallmentEditorDialog(
     var categoryId by remember { mutableStateOf(existing?.categoryId) }
 
     val totalCents = Money.parseYuanToCents(totalInput)
+    val feeCents = if (feeInput.isBlank()) 0L else Money.parseYuanToCents(feeInput)
     val periodCount = periodCountInput.toIntOrNull()
     val repayDay = repayDayInput.toIntOrNull()
     val startValid = runCatching { LocalDate.parse(startDateInput) }.isSuccess
 
     val valid = name.isNotBlank() &&
         totalCents != null && totalCents > 0L &&
+        feeCents != null &&
         periodCount != null && periodCount in 1..120 &&
         repayDay != null && repayDay in 1..31 &&
         startValid
@@ -318,7 +322,7 @@ private fun InstallmentEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "新建计划" else "编辑计划") },
+        title = { Text(if (existing == null) "新建月付" else "编辑月付") },
         text = {
             Column(
                 modifier = Modifier
@@ -333,15 +337,6 @@ private fun InstallmentEditorDialog(
                     singleLine = true,
                     label = { Text("名称") },
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    KindChip("月付", kind == InstallmentKind.MONTHLY) {
-                        kind = InstallmentKind.MONTHLY
-                    }
-                    KindChip("白条", kind == InstallmentKind.CREDIT) {
-                        kind = InstallmentKind.CREDIT
-                    }
-                }
 
                 OutlinedTextField(
                     value = totalInput,
@@ -370,6 +365,22 @@ private fun InstallmentEditorDialog(
                         isError = repayDay == null || repayDay !in 1..31,
                     )
                 }
+
+                OutlinedTextField(
+                    value = feeInput,
+                    onValueChange = { feeInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    prefix = { Text("¥") },
+                    label = { Text("手续费（可留空）") },
+                    supportingText = {
+                        Text(
+                            text = "一次性收取，和第一期一起扣。",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    },
+                    isError = feeCents == null,
+                )
 
                 if (perPeriod > 0L) {
                     Text(
@@ -456,7 +467,7 @@ private fun InstallmentEditorDialog(
                             id = existing?.id ?: 0L,
                             ledgerId = existing?.ledgerId ?: 0L,
                             name = name.trim(),
-                            kind = kind,
+                            kind = InstallmentKind.MONTHLY,
                             totalAmountCents = totalCents ?: 0L,
                             periodCount = periodCount ?: 1,
                             perPeriodCents = perPeriod,
@@ -464,6 +475,7 @@ private fun InstallmentEditorDialog(
                             startDateKey = startDateInput.trim(),
                             accountId = accountId,
                             categoryId = categoryId,
+                            feeCents = feeCents?.takeIf { it > 0L },
                             isActive = existing?.isActive ?: true,
                             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                         )
@@ -475,30 +487,6 @@ private fun InstallmentEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
-}
-
-@Composable
-private fun KindChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceContainer
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
-    }
 }
 
 @Composable

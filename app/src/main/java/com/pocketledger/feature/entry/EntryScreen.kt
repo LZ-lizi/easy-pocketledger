@@ -1,6 +1,7 @@
 package com.pocketledger.feature.entry
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
-import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
@@ -58,15 +58,14 @@ private val KEYPAD_ROWS = listOf(
 )
 
 /**
- * Keypad-first entry for all three movements.
+ * Keypad-first entry for expenses, income, transfers and 月付 plans.
  *
- * The custom keypad replaces the system IME on purpose: it keeps the amount field,
- * the category grid and the account picker visible at once, so a routine entry
- * never scrolls and never fights a keyboard.
+ * The category grid shows **leaf items only** and starts collapsed to the pinned
+ * set, so the common case needs no scrolling. Grouping into 大类 exists for
+ * statistics, not for data entry.
  *
- * The category grid shows leaf items directly. Grouping into 大类 exists for
- * statistics, not for data entry -- making someone pick a group first spends a tap
- * on a decision they do not care about.
+ * Saving closes the screen. Previously it cleared the amount and left a "已记一笔"
+ * hint, which left it ambiguous whether the entry had actually been recorded.
  */
 @Composable
 fun EntryScreen(
@@ -83,19 +82,21 @@ fun EntryScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         EntryHeader(
-            type = state.type,
-            justSaved = state.justSaved,
+            mode = state.mode,
             dateKey = state.dateKey,
             customTime = state.customTime,
-            onTypeChange = viewModel::setType,
+            onModeChange = viewModel::setMode,
             onTapDate = { dateTimeDialogVisible = true },
             onClose = onClose,
         )
 
-        AmountDisplay(amountInput = state.amountInput, type = state.type)
+        AmountDisplay(
+            amountInput = state.amountInput,
+            mode = state.mode,
+        )
 
-        if (state.isTransfer) {
-            TransferPanel(
+        when {
+            state.isTransfer -> TransferPanel(
                 accounts = state.accounts,
                 fromId = state.selectedAccountId,
                 toId = state.selectedToAccountId,
@@ -105,50 +106,58 @@ fun EntryScreen(
                 onFeeChange = viewModel::setFee,
                 modifier = Modifier.weight(1f),
             )
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                items(state.orderedCategories, key = { it.id }) { category ->
-                    CategoryCell(
-                        category = category,
-                        selected = category.id == state.selectedCategoryId,
-                        onClick = { viewModel.selectCategory(category.id) },
-                    )
-                }
-            }
 
-            AccountPicker(
-                accounts = state.accounts,
-                selectedId = state.selectedAccountId,
-                onSelect = viewModel::selectAccount,
+            state.isMonthly -> MonthlyPanel(
+                state = state,
+                onNameChange = viewModel::setPlanName,
+                onPeriodsChange = viewModel::setPlanPeriods,
+                onRepayDayChange = viewModel::setPlanRepayDay,
+                onFeeChange = viewModel::setPlanFee,
+                onSelectCategory = viewModel::selectCategory,
+                onSelectAccount = viewModel::selectAccount,
+                modifier = Modifier.weight(1f),
+            )
+
+            else -> {
+                CategoryGrid(
+                    state = state,
+                    onSelect = viewModel::selectCategory,
+                    onToggleExpanded = viewModel::toggleCategoriesExpanded,
+                    modifier = Modifier.weight(1f),
+                )
+                AccountPicker(
+                    accounts = state.accounts,
+                    selectedId = state.selectedAccountId,
+                    onSelect = viewModel::selectAccount,
+                )
+            }
+        }
+
+        if (!state.isMonthly) {
+            NoteField(
+                note = state.note,
+                merchant = state.merchant,
+                showMerchant = !state.isTransfer,
+                onNoteChange = viewModel::setNote,
+                onMerchantChange = viewModel::setMerchant,
+            )
+        } else {
+            NoteField(
+                note = state.note,
+                merchant = "",
+                showMerchant = false,
+                onNoteChange = viewModel::setNote,
+                onMerchantChange = {},
             )
         }
 
-        NoteField(
-            note = state.note,
-            merchant = state.merchant,
-            showMerchant = !state.isTransfer,
-            onNoteChange = viewModel::setNote,
-            onMerchantChange = viewModel::setMerchant,
-        )
-
-        Keypad(
-            onKey = viewModel::pressKey,
-            onBackspace = viewModel::backspace,
-        )
+        Keypad(onKey = viewModel::pressKey, onBackspace = viewModel::backspace)
 
         SaveButton(
             enabled = state.canSave,
             amountCents = state.amountCents,
-            type = state.type,
-            onSave = viewModel::save,
+            mode = state.mode,
+            onSave = { viewModel.save(onClose) },
         )
     }
 
@@ -166,11 +175,10 @@ fun EntryScreen(
 
 @Composable
 private fun EntryHeader(
-    type: TxnType,
-    justSaved: Boolean,
+    mode: EntryMode,
     dateKey: String,
     customTime: LocalTime?,
-    onTypeChange: (TxnType) -> Unit,
+    onModeChange: (EntryMode) -> Unit,
     onTapDate: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -195,20 +203,10 @@ private fun EntryHeader(
         }
 
         Spacer(Modifier.width(6.dp))
-        TypeSwitch(type = type, onTypeChange = onTypeChange)
+        ModeSwitch(mode = mode, onModeChange = onModeChange)
         Spacer(Modifier.weight(1f))
 
-        if (justSaved) {
-            Text(
-                text = "已记一笔",
-                style = MaterialTheme.typography.labelMedium,
-                color = LedgerTheme.colors.income,
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-
-        // The time only appears once it has been changed; otherwise the entry simply
-        // records "now" and the header stays quiet.
+        // Bordered so it reads as tappable; unpinned-looking chips get missed.
         val label = buildString {
             append(DateLabels.dayLabel(dateKey))
             if (customTime != null) {
@@ -226,6 +224,11 @@ private fun EntryHeader(
                         Color.Transparent
                     }
                 )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = CircleShape,
+                )
                 .clickable(onClick = onTapDate)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
@@ -239,6 +242,245 @@ private fun EntryHeader(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun ModeSwitch(mode: EntryMode, onModeChange: (EntryMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        EntryMode.entries.forEach { candidate ->
+            val selected = candidate == mode
+            val accent = when (candidate) {
+                EntryMode.EXPENSE -> LedgerTheme.colors.expense
+                EntryMode.INCOME -> LedgerTheme.colors.income
+                EntryMode.TRANSFER -> LedgerTheme.colors.transfer
+                EntryMode.MONTHLY -> MaterialTheme.colorScheme.tertiary
+            }
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (selected) accent else Color.Transparent)
+                    .clickable { onModeChange(candidate) }
+                    .padding(horizontal = 11.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    text = candidate.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) Color.White
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AmountDisplay(amountInput: String, mode: EntryMode) {
+    val ledger = LedgerTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        if (mode == EntryMode.MONTHLY) {
+            Text(
+                text = "总金额",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = if (amountInput.isEmpty()) "0.00" else amountInput,
+            style = MoneyTextStyles.Hero,
+            color = when {
+                amountInput.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                mode == EntryMode.INCOME -> ledger.income
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The collapsed grid plus its 「更多」 / 「收起」 control. */
+@Composable
+private fun CategoryGrid(
+    state: EntryUiState,
+    onSelect: (Long) -> Unit,
+    onToggleExpanded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(state.visibleCategories, key = { it.id }) { category ->
+                CategoryCell(
+                    category = category,
+                    selected = category.id == state.selectedCategoryId,
+                    onClick = { onSelect(category.id) },
+                )
+            }
+        }
+
+        if (state.showMoreButton) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clickable(onClick = onToggleExpanded)
+                        .padding(horizontal = 18.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = if (state.categoriesExpanded) {
+                            "收起"
+                        } else {
+                            "更多 ${state.hiddenCategoryCount}"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The 月付 form.
+ *
+ * The keypad amount is the plan's total, so only the schedule details are asked for
+ * here. Everything the plan needs to start generating charges is collected in one
+ * place, and the per-instalment figure updates live.
+ */
+@Composable
+private fun MonthlyPanel(
+    state: EntryUiState,
+    onNameChange: (String) -> Unit,
+    onPeriodsChange: (String) -> Unit,
+    onRepayDayChange: (String) -> Unit,
+    onFeeChange: (String) -> Unit,
+    onSelectCategory: (Long) -> Unit,
+    onSelectAccount: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedTextField(
+            value = state.planName,
+            onValueChange = onNameChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("名称", style = MaterialTheme.typography.bodySmall) },
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.planPeriods,
+                onValueChange = onPeriodsChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("期数", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+                isError = state.planPeriodsValue == null,
+            )
+            OutlinedTextField(
+                value = state.planRepayDay,
+                onValueChange = onRepayDayChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("每月几号", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+                isError = state.planRepayDayValue == null,
+            )
+        }
+
+        OutlinedTextField(
+            value = state.planFeeInput,
+            onValueChange = onFeeChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            prefix = { Text("¥") },
+            label = { Text("手续费（可留空）", style = MaterialTheme.typography.bodySmall) },
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
+
+        if (state.planPerPeriodCents > 0L) {
+            Text(
+                text = "每期约 ${Money.formatWithSymbol(state.planPerPeriodCents)}，到期自动生成扣款",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (state.visibleCategories.isNotEmpty()) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.visibleCategories.take(10).forEach { category ->
+                    CategoryChip(
+                        category = category,
+                        selected = category.id == state.selectedCategoryId,
+                        onClick = { onSelectCategory(category.id) },
+                    )
+                }
+            }
+        }
+
+        if (state.accounts.isNotEmpty()) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.accounts.forEach { account ->
+                    AccountChip(account, account.id == state.selectedAccountId) {
+                        onSelectAccount(account.id)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChip(category: CategoryEntity, selected: Boolean, onClick: () -> Unit) {
+    val accent = Color(category.colorArgb)
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (selected) accent else accent.copy(alpha = 0.14f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color.White else accent,
+        )
     }
 }
 
@@ -335,70 +577,6 @@ private fun StepChip(label: String, onClick: () -> Unit) {
             text = label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun TypeSwitch(type: TxnType, onTypeChange: (TxnType) -> Unit) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        TypePill("支出", type == TxnType.EXPENSE, LedgerTheme.colors.expense) {
-            onTypeChange(TxnType.EXPENSE)
-        }
-        TypePill("收入", type == TxnType.INCOME, LedgerTheme.colors.income) {
-            onTypeChange(TxnType.INCOME)
-        }
-        TypePill("转账", type == TxnType.TRANSFER, LedgerTheme.colors.transfer) {
-            onTypeChange(TxnType.TRANSFER)
-        }
-    }
-}
-
-@Composable
-private fun TypePill(
-    label: String,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (selected) accent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 7.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun AmountDisplay(amountInput: String, type: TxnType) {
-    val ledger = LedgerTheme.colors
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        Text(
-            text = if (amountInput.isEmpty()) "0.00" else amountInput,
-            style = MoneyTextStyles.Hero,
-            color = when {
-                amountInput.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                type == TxnType.INCOME -> ledger.income
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -511,13 +689,6 @@ private fun AccountChip(account: AccountEntity, selected: Boolean, onClick: () -
     }
 }
 
-/**
- * A categorised cell with its vector icon.
- *
- * The icon replaces the earlier first-character badge: 早/午/晚 and 水/电/燃 all
- * begin with visually similar glyphs, so the badge made the grid harder to scan
- * rather than easier.
- */
 @Composable
 private fun CategoryCell(
     category: CategoryEntity,
@@ -665,17 +836,19 @@ private fun KeypadButton(
 private fun SaveButton(
     enabled: Boolean,
     amountCents: Long,
-    type: TxnType,
+    mode: EntryMode,
     onSave: () -> Unit,
 ) {
     val ledger = LedgerTheme.colors
-    val accent = when (type) {
-        TxnType.INCOME -> ledger.income
-        TxnType.TRANSFER -> ledger.transfer
-        TxnType.EXPENSE -> MaterialTheme.colorScheme.primary
+    val accent = when (mode) {
+        EntryMode.INCOME -> ledger.income
+        EntryMode.TRANSFER -> ledger.transfer
+        EntryMode.MONTHLY -> MaterialTheme.colorScheme.tertiary
+        EntryMode.EXPENSE -> MaterialTheme.colorScheme.primary
     }
-    val hint = when (type) {
-        TxnType.TRANSFER -> "选择转出和转入账户"
+    val hint = when (mode) {
+        EntryMode.TRANSFER -> "选择转出和转入账户"
+        EntryMode.MONTHLY -> "填写名称、期数和还款日"
         else -> "选择分类和账户"
     }
     Box(
@@ -692,7 +865,11 @@ private fun SaveButton(
     ) {
         Text(
             text = if (enabled) {
-                val verb = if (type == TxnType.TRANSFER) "转账" else "保存"
+                val verb = when (mode) {
+                    EntryMode.TRANSFER -> "转账"
+                    EntryMode.MONTHLY -> "创建月付"
+                    else -> "保存"
+                }
                 "$verb ${Money.formatWithSymbol(amountCents)}"
             } else {
                 hint

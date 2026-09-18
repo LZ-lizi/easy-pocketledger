@@ -150,9 +150,3 @@ class InstallmentSettingsViewModel(private val container: AppContainer) : ViewMo
         }
     }
 }
-
-/** Display label for a plan kind. */
-fun installmentKindLabel(kind: InstallmentKind): String = when (kind) {
-    InstallmentKind.MONTHLY -> "月付"
-    InstallmentKind.CREDIT -> "白条"
-}

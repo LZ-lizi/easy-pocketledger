@@ -89,7 +89,7 @@ private val TABS = listOf(
     TabItem(Routes.LEDGER, "明细", LedgerIcon.LIST),
     TabItem(Routes.STATS, "统计", LedgerIcon.CHART),
     TabItem(Routes.ACCOUNTS, "账户", LedgerIcon.WALLET),
-    TabItem(Routes.SETTINGS, "我的", LedgerIcon.PERSON),
+    TabItem(Routes.SETTINGS, "设置", LedgerIcon.SETTINGS),
 )
 
 private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"

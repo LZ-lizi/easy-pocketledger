@@ -68,6 +68,9 @@ class AppContainer(context: Context) {
 
     private val preferences: AppPreferences by lazy { AppPreferences(appContext) }
 
+    /** App-level settings (pinned categories, fired budget alerts). */
+    val appPreferences: AppPreferences get() = preferences
+
     private val budgetNotifier: BudgetNotifier by lazy { BudgetNotifier(appContext) }
 
     private val budgetAlertChecker: BudgetAlertChecker by lazy {

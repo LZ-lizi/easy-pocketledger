@@ -59,6 +59,10 @@ enum class LedgerIcon {
     CASH,
     CARD,
     BANK,
+    /** 支付宝: a card with the 支 stroke. */
+    ALIPAY,
+    /** 微信: two overlapping chat bubbles. */
+    WECHAT,
 
     /** Used for custom categories that carry no curated key. */
     TAG,
@@ -88,8 +92,10 @@ enum class LedgerIcon {
             "other" -> OTHER
             "income" -> INCOME
             "cash" -> CASH
-            "card", "prepaid", "alipay", "wechat" -> CARD
+            "card", "prepaid" -> CARD
             "bank" -> BANK
+            "alipay" -> ALIPAY
+            "wechat" -> WECHAT
             "wallet" -> WALLET
             else -> TAG
         }
@@ -381,6 +387,40 @@ private fun DrawScope.drawLedgerIcon(icon: LedgerIcon, tint: Color) {
             drawPath(pediment, tint, style = outline)
             listOf(0.28f, 0.50f, 0.72f).forEach { x -> line(x, 0.48f, x, 0.74f, thin) }
             line(0.14f, 0.80f, 0.86f, 0.80f, stroke)
+        }
+
+        // 支付宝: a card with a stylised 支, so it is not confused with a generic card.
+        LedgerIcon.ALIPAY -> {
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(w * 0.12f, h * 0.28f),
+                size = Size(w * 0.76f, h * 0.44f),
+                cornerRadius = CornerRadius(w * 0.10f),
+                style = outline,
+            )
+            line(0.36f, 0.42f, 0.64f, 0.42f, thin)
+            line(0.50f, 0.42f, 0.50f, 0.60f, thin)
+            line(0.34f, 0.58f, 0.66f, 0.58f, thin)
+        }
+
+        // 微信: two overlapping speech bubbles.
+        LedgerIcon.WECHAT -> {
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(w * 0.10f, h * 0.22f),
+                size = Size(w * 0.56f, h * 0.42f),
+                cornerRadius = CornerRadius(w * 0.14f),
+                style = outline,
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(w * 0.36f, h * 0.42f),
+                size = Size(w * 0.54f, h * 0.38f),
+                cornerRadius = CornerRadius(w * 0.14f),
+                style = outline,
+            )
+            drawCircle(tint, w * 0.045f, Offset(w * 0.28f, h * 0.43f))
+            drawCircle(tint, w * 0.045f, Offset(w * 0.48f, h * 0.43f))
         }
 
         // A luggage tag: the fallback for custom categories.

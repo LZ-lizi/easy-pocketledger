@@ -216,9 +216,6 @@ private fun FieldsCard(state: DetailUiState) {
                 state.merchant?.takeIf { it.isNotBlank() }?.let { DetailRow("商家", it) }
             }
             state.note?.takeIf { it.isNotBlank() }?.let { DetailRow("备注", it) }
-            if (state.type != TxnType.TRANSFER) {
-                DetailRow("来源", state.sourceLabel)
-            }
         }
     }
 }

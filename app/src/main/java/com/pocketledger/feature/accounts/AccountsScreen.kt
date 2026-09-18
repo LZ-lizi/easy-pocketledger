@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountType
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 
@@ -185,11 +187,10 @@ private fun AccountCard(row: AccountRow, onClick: () -> Unit) {
                     .background(accent.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = row.account.name.take(1),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = accent,
+                LedgerIconView(
+                    icon = LedgerIcon.forKey(row.account.iconKey),
+                    tint = accent,
+                    size = 22.dp,
                 )
             }
             Spacer(Modifier.width(12.dp))

@@ -65,14 +65,26 @@ class InstallmentRunner(private val repository: LedgerRepository) {
                     ).takeIf { it > 0L }
                     ?: continue
 
+                // A one-off handling fee rides along with the first instalment, so the
+                // plan is fully accounted for without a second schedule.
+                val feeCents = if (period.periodIndex == 1) plan.feeCents ?: 0L else 0L
+
                 val txnId = repository.addTransactionInLedger(
                     ledgerId = plan.ledgerId,
                     txn = TxnEntity(
                         type = TxnType.EXPENSE,
-                        amountCents = period.amountCents,
+                        amountCents = period.amountCents + feeCents,
                         accountId = accountId,
                         categoryId = plan.categoryId,
-                        note = "${plan.name} 第 ${period.periodIndex}/${plan.periodCount} 期",
+                        note = buildString {
+                            append(plan.name)
+                            append(" 第 ")
+                            append(period.periodIndex)
+                            append('/')
+                            append(plan.periodCount)
+                            append(" 期")
+                            if (feeCents > 0L) append("（含手续费）")
+                        },
                         happenedAt = dueMillis(period.dueDateKey),
                         localDateKey = period.dueDateKey,
                         source = TxnSource.INSTALLMENT,

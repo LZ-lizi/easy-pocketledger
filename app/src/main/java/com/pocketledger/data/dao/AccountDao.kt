@@ -10,10 +10,17 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AccountDao {
 
+    /**
+     * Real accounts only.
+     *
+     * `isHidden = 0` here as well as in [observeActive]: a hidden account is an
+     * implementation detail of 累计模式 ledgers and must never surface on any screen,
+     * not just in pickers.
+     */
     @Query(
         """
         SELECT * FROM account
-        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isHidden = 0
         ORDER BY isArchived ASC, sortOrder ASC, id ASC
         """
     )
@@ -42,7 +49,7 @@ interface AccountDao {
     @Query(
         """
         SELECT * FROM account
-        WHERE ledgerId = :ledgerId AND deletedAt IS NULL
+        WHERE ledgerId = :ledgerId AND deletedAt IS NULL AND isHidden = 0
         ORDER BY isArchived ASC, sortOrder ASC, id ASC
         """
     )

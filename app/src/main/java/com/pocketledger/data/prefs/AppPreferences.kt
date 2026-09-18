@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -44,6 +46,28 @@ class AppPreferences(private val context: Context) {
             prefs[firedBudgetAlerts] = current.filterTo(mutableSetOf()) { key ->
                 key.substringBefore(':') in periodKeys
             }
+        }
+    }
+
+    /**
+     * Categories shown on the first screen of the entry keypad.
+     *
+     * Empty means "not customised yet", which the keypad reads as "use the defaults"
+     * rather than "show nothing" -- so a new install is immediately usable and a user
+     * who deliberately unpins everything still sees something.
+     */
+    private val pinnedCategories = stringSetPreferencesKey("pinned_category_ids")
+
+    fun pinnedCategoryIds(): Flow<Set<Long>> =
+        context.settingsStore.data.map { prefs ->
+            (prefs[pinnedCategories] ?: emptySet())
+                .mapNotNull { it.toLongOrNull() }
+                .toSet()
+        }
+
+    suspend fun setPinnedCategoryIds(ids: Set<Long>) {
+        context.settingsStore.edit { prefs ->
+            prefs[pinnedCategories] = ids.map(Long::toString).toSet()
         }
     }
 }

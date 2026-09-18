@@ -55,7 +55,7 @@ import com.pocketledger.data.entity.WishEntity
         InstallmentPlanEntity::class,
         InstallmentPeriodEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -77,7 +77,7 @@ abstract class LedgerDatabase : RoomDatabase() {
         fun build(context: Context): LedgerDatabase =
             Room.databaseBuilder(context.applicationContext, LedgerDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

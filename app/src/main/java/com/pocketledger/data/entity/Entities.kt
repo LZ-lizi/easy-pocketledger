@@ -367,6 +367,8 @@ data class InstallmentPlanEntity(
     val startDateKey: String,
     val accountId: Long? = null,
     val categoryId: Long? = null,
+    /** One-off handling fee, charged together with the first instalment. */
+    val feeCents: Long? = null,
     val note: String? = null,
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
