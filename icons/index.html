@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<title>记账本 图标集</title>
+<style>
+  body { font: 14px/1.5 system-ui, "MiSans", sans-serif; margin: 32px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 600; color: #666; margin: 28px 0 10px; }
+  .note { color: #666; margin: 0 0 8px; max-width: 70em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+           gap: 12px; }
+  .card { margin: 0; border: 1px solid #e5e5e5; border-radius: 10px; overflow: hidden; }
+  .strip { display: flex; }
+  /* The dark half only inverts the icon, never the tile -- inverting the tile would
+     flip its background to near-white and stop simulating a dark surface. */
+  .tile { flex: 1; display: flex; align-items: center; justify-content: center; height: 72px; }
+  .tile.light { background: #ffffff; }
+  .tile.dark { background: #17181c; }
+  .tile.dark img { filter: invert(1); }
+  .tile img { width: 48px; height: 48px; }
+  .tile.big img { width: 76px; height: 76px; }
+  figcaption { border-top: 1px solid #eee; padding: 8px 10px; display: flex;
+                flex-direction: column; }
+  figcaption b { font-size: 12px; }
+  figcaption span { font-size: 11px; color: #888; }
+</style>
+<h1>记账本 图标集</h1>
+<p class="note">共 31 个界面图标 + 3 个启动图标。每个卡片左半为浅色背景、右半为深色背景；
+深色一侧用 <code>filter: invert(1)</code> 把源文件的黑色描边反相为白色，仅为对照查看 ——
+源文件本身都是黑色描边，实际由 App 在运行时着色。</p>
+<div class="grid">
+<h2>导航</h2>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/list.svg" alt="list"></div><div class="tile dark"><img src="svg/list.svg" alt=""></div></div><figcaption><b>list.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/chart.svg" alt="chart"></div><div class="tile dark"><img src="svg/chart.svg" alt=""></div></div><figcaption><b>chart.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/calendar.svg" alt="calendar"></div><div class="tile dark"><img src="svg/calendar.svg" alt=""></div></div><figcaption><b>calendar.svg</b><span>calendar</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/search.svg" alt="search"></div><div class="tile dark"><img src="svg/search.svg" alt=""></div></div><figcaption><b>search.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/wallet.svg" alt="wallet"></div><div class="tile dark"><img src="svg/wallet.svg" alt=""></div></div><figcaption><b>wallet.svg</b><span>wallet</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/person.svg" alt="person"></div><div class="tile dark"><img src="svg/person.svg" alt=""></div></div><figcaption><b>person.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/plus.svg" alt="plus"></div><div class="tile dark"><img src="svg/plus.svg" alt=""></div></div><figcaption><b>plus.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/settings.svg" alt="settings"></div><div class="tile dark"><img src="svg/settings.svg" alt=""></div></div><figcaption><b>settings.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/chevron-right.svg" alt="chevron-right"></div><div class="tile dark"><img src="svg/chevron-right.svg" alt=""></div></div><figcaption><b>chevron-right.svg</b><span>—</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/ellipsis.svg" alt="ellipsis"></div><div class="tile dark"><img src="svg/ellipsis.svg" alt=""></div></div><figcaption><b>ellipsis.svg</b><span>—</span></figcaption></figure>
+<h2>支出大类</h2>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/food.svg" alt="food"></div><div class="tile dark"><img src="svg/food.svg" alt=""></div></div><figcaption><b>food.svg</b><span>food</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/transport.svg" alt="transport"></div><div class="tile dark"><img src="svg/transport.svg" alt=""></div></div><figcaption><b>transport.svg</b><span>transport</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/shopping.svg" alt="shopping"></div><div class="tile dark"><img src="svg/shopping.svg" alt=""></div></div><figcaption><b>shopping.svg</b><span>shopping</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/home.svg" alt="home"></div><div class="tile dark"><img src="svg/home.svg" alt=""></div></div><figcaption><b>home.svg</b><span>home</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/comms.svg" alt="comms"></div><div class="tile dark"><img src="svg/comms.svg" alt=""></div></div><figcaption><b>comms.svg</b><span>comms</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/study.svg" alt="study"></div><div class="tile dark"><img src="svg/study.svg" alt=""></div></div><figcaption><b>study.svg</b><span>study</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/campus.svg" alt="campus"></div><div class="tile dark"><img src="svg/campus.svg" alt=""></div></div><figcaption><b>campus.svg</b><span>campus</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/fun.svg" alt="fun"></div><div class="tile dark"><img src="svg/fun.svg" alt=""></div></div><figcaption><b>fun.svg</b><span>fun</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/medical.svg" alt="medical"></div><div class="tile dark"><img src="svg/medical.svg" alt=""></div></div><figcaption><b>medical.svg</b><span>medical</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/gift.svg" alt="gift"></div><div class="tile dark"><img src="svg/gift.svg" alt=""></div></div><figcaption><b>gift.svg</b><span>gift</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/finance.svg" alt="finance"></div><div class="tile dark"><img src="svg/finance.svg" alt=""></div></div><figcaption><b>finance.svg</b><span>finance</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/work.svg" alt="work"></div><div class="tile dark"><img src="svg/work.svg" alt=""></div></div><figcaption><b>work.svg</b><span>work</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/pet.svg" alt="pet"></div><div class="tile dark"><img src="svg/pet.svg" alt=""></div></div><figcaption><b>pet.svg</b><span>pet</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/other.svg" alt="other"></div><div class="tile dark"><img src="svg/other.svg" alt=""></div></div><figcaption><b>other.svg</b><span>other</span></figcaption></figure>
+<h2>收入与账户</h2>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/income.svg" alt="income"></div><div class="tile dark"><img src="svg/income.svg" alt=""></div></div><figcaption><b>income.svg</b><span>income</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/cash.svg" alt="cash"></div><div class="tile dark"><img src="svg/cash.svg" alt=""></div></div><figcaption><b>cash.svg</b><span>cash</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/card.svg" alt="card"></div><div class="tile dark"><img src="svg/card.svg" alt=""></div></div><figcaption><b>card.svg</b><span>card / prepaid</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/bank.svg" alt="bank"></div><div class="tile dark"><img src="svg/bank.svg" alt=""></div></div><figcaption><b>bank.svg</b><span>bank</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/alipay.svg" alt="alipay"></div><div class="tile dark"><img src="svg/alipay.svg" alt=""></div></div><figcaption><b>alipay.svg</b><span>alipay</span></figcaption></figure>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/wechat.svg" alt="wechat"></div><div class="tile dark"><img src="svg/wechat.svg" alt=""></div></div><figcaption><b>wechat.svg</b><span>wechat</span></figcaption></figure>
+<h2>兜底</h2>
+<figure class="card"><div class="strip"><div class="tile light"><img src="svg/tag.svg" alt="tag"></div><div class="tile dark"><img src="svg/tag.svg" alt=""></div></div><figcaption><b>tag.svg</b><span>—</span></figcaption></figure>
+</div>
+<h2>启动图标</h2>
+<div class="grid">
+  <figure class="card"><div class="strip"><div class="tile light big"><img src="svg/launcher.svg" alt="launcher"></div></div><figcaption><b>launcher.svg</b><span>合成预览</span></figcaption></figure>
+  <figure class="card"><div class="strip"><div class="tile light big"><img src="svg/launcher-background.svg" alt=""></div></div><figcaption><b>launcher-background.svg</b><span>背景</span></figcaption></figure>
+  <figure class="card"><div class="strip"><div class="tile dark big"><img src="svg/launcher-foreground.svg" alt=""></div></div><figcaption><b>launcher-foreground.svg</b><span>前景 ￥</span></figcaption></figure>
+</div>
+</html>
