@@ -45,6 +45,13 @@ data class DetailUiState(
     val timeIsApproximate: Boolean = true,
     val isExcludedFromStats: Boolean = false,
     val sourceLabel: String = "",
+    /**
+     * True when the ledger holding this entry has been archived.
+     *
+     * An archived ledger is put away: its numbers stay readable and stop being
+     * editable, otherwise 归档 would only be a label.
+     */
+    val ledgerArchived: Boolean = false,
 )
 
 /**
@@ -53,6 +60,10 @@ data class DetailUiState(
  * Names are resolved from snapshots rather than kept in a denormalised row: the
  * detail screen shows a single record, so two extra reads cost nothing and always
  * reflect a rename.
+ *
+ * The row itself is *observed* rather than read once. The ViewModel outlives a trip to
+ * the edit screen, so a one-shot read left the page showing pre-edit values on the way
+ * back -- the fix is to follow the data.
  */
 class DetailViewModel(
     private val repository: LedgerRepository,
@@ -64,50 +75,56 @@ class DetailViewModel(
 
     init {
         viewModelScope.launch {
-            val txn = repository.transaction(transactionId)
-            if (txn == null) {
-                _uiState.update { it.copy(missing = true) }
-                return@launch
-            }
-            val categories = repository.categoriesSnapshot().associateBy { it.id }
-            val accounts = repository.accountsSnapshot().associateBy { it.id }
-            val category = txn.categoryId?.let { categories[it] }
+            repository.observeTransaction(transactionId).collect { txn ->
+                if (txn == null) {
+                    _uiState.update { it.copy(missing = true) }
+                    return@collect
+                }
+                val categories = repository.categoriesSnapshot().associateBy { it.id }
+                val accounts = repository.accountsSnapshot().associateBy { it.id }
+                val category = txn.categoryId?.let { categories[it] }
 
-            val title = when (txn.type) {
-                TxnType.TRANSFER -> txn.note?.takeIf { it.isNotBlank() } ?: "账户互转"
-                else -> category?.name ?: "未分类"
-            }
-            val iconKey = when (txn.type) {
-                TxnType.TRANSFER -> "finance"
-                TxnType.INCOME -> "income"
-                else -> category?.iconKey ?: "more"
-            }
+                val title = when (txn.type) {
+                    TxnType.TRANSFER -> txn.note?.takeIf { it.isNotBlank() } ?: "账户互转"
+                    else -> category?.name ?: "未分类"
+                }
+                val iconKey = when (txn.type) {
+                    TxnType.TRANSFER -> "finance"
+                    TxnType.INCOME -> "income"
+                    else -> category?.iconKey ?: "more"
+                }
 
-            val stamp = Instant.ofEpochMilli(txn.happenedAt).atZone(ZoneId.systemDefault())
+                val stamp = Instant.ofEpochMilli(txn.happenedAt).atZone(ZoneId.systemDefault())
 
-            _uiState.update {
-                it.copy(
-                    missing = false,
-                    type = txn.type,
-                    amountCents = txn.amountCents,
-                    feeCents = txn.feeCents,
-                    title = title,
-                    iconKey = iconKey,
-                    categoryName = category?.name,
-                    accountName = accounts[txn.accountId]?.name.orEmpty(),
-                    toAccountName = txn.toAccountId?.let { id -> accounts[id]?.name },
-                    merchant = txn.merchant,
-                    note = txn.note,
-                    dateLabel = stamp.format(DATE_FORMAT),
-                    timeLabel = if (txn.timeMode == TimeMode.HIDDEN) {
-                        null
-                    } else {
-                        stamp.format(CLOCK_FORMAT)
-                    },
-                    timeIsApproximate = txn.timeMode == TimeMode.AUTO,
-                    isExcludedFromStats = txn.isExcludedFromStats,
-                    sourceLabel = sourceLabel(txn.source),
-                )
+                _uiState.update {
+                    it.copy(
+                        missing = false,
+                        type = txn.type,
+                        amountCents = txn.amountCents,
+                        feeCents = txn.feeCents,
+                        title = title,
+                        iconKey = iconKey,
+                        categoryName = category?.name,
+                        accountName = accounts[txn.accountId]?.name.orEmpty(),
+                        toAccountName = txn.toAccountId?.let { id -> accounts[id]?.name },
+                        merchant = txn.merchant,
+                        note = txn.note,
+                        dateLabel = stamp.format(DATE_FORMAT),
+                        timeLabel = if (txn.timeMode == TimeMode.HIDDEN) {
+                            null
+                        } else {
+                            stamp.format(CLOCK_FORMAT)
+                        },
+                        timeIsApproximate = txn.timeMode == TimeMode.AUTO,
+                        isExcludedFromStats = txn.isExcludedFromStats,
+                        sourceLabel = sourceLabel(txn.source),
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            repository.observeSelectedLedger().collect { ledger ->
+                _uiState.update { it.copy(ledgerArchived = ledger?.isArchived == true) }
             }
         }
     }

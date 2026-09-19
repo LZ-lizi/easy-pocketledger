@@ -57,6 +57,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     contentPadding: PaddingValues,
     onOpenTransaction: (Long) -> Unit,
+    onOpenSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -71,6 +72,7 @@ fun HomeScreen(
         onSelectDay = viewModel::selectDay,
         onOpenTransaction = onOpenTransaction,
         onTapLedger = viewModel::openLedgerSwitcher,
+        onOpenSearch = onOpenSearch,
         modifier = modifier,
     )
 
@@ -104,6 +106,7 @@ private fun HomeContent(
     onSelectDay: (String?) -> Unit,
     onOpenTransaction: (Long) -> Unit,
     onTapLedger: () -> Unit,
+    onOpenSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -126,6 +129,7 @@ private fun HomeContent(
                 onNext = onNextMonth,
                 onToggleView = onToggleView,
                 onTapLedger = onTapLedger,
+                onOpenSearch = onOpenSearch,
             )
         }
 
@@ -217,6 +221,7 @@ private fun MonthSwitcher(
     onNext: () -> Unit,
     onToggleView: () -> Unit,
     onTapLedger: () -> Unit,
+    onOpenSearch: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -243,7 +248,34 @@ private fun MonthSwitcher(
         StepButton(symbol = "›", onClick = onNext)
         Spacer(Modifier.weight(1f))
 
+        // Search sits left of the ledger chip: it filters the ledger the chip names, so
+        // reading order runs "search this ledger", and the chip stays on the edge where
+        // it has always been.
+        RoundIconButton(
+            icon = LedgerIcon.SEARCH,
+            onClick = onOpenSearch,
+        )
+        Spacer(Modifier.width(8.dp))
         LedgerChip(name = ledgerName, onClick = onTapLedger)
+    }
+}
+
+/** A round icon button in the header row: same size and shape as the view toggle. */
+@Composable
+private fun RoundIconButton(icon: LedgerIcon, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        LedgerIconView(
+            icon = icon,
+            tint = MaterialTheme.colorScheme.primary,
+            size = 18.dp,
+        )
     }
 }
 
@@ -336,7 +368,7 @@ private fun AllowanceCard(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "点这里填写每月生活费，首页就会显示「本月还能花」和日均可用。",
+                    text = "点这里填写每月生活费，首页就会显示「预算剩余」和剩余日均可用。",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -344,7 +376,7 @@ private fun AllowanceCard(
             }
 
             Text(
-                text = if (allowance.hasBudget) "本月还能花" else "本月已花",
+                text = if (allowance.hasBudget) "预算剩余" else "本月已花",
                 style = MaterialTheme.typography.labelLarge,
                 color = scheme.onSurfaceVariant,
             )
@@ -366,11 +398,31 @@ private fun AllowanceCard(
             )
 
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = secondaryLine(allowance),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-            )
+            // Two daily figures, facing each other: what is left to spend per remaining
+            // day on the left, what is actually being spent per elapsed day on the
+            // right. Reading them together is the "am I on pace" check, and neither
+            // number alone answers it.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = secondaryLine(allowance),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "已记账日均 ${Money.formatWithSymbol(allowance.dailySpentCents)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
 
             // The progress bar and the 已花/额度 row only say something when there is an
             // allowance to measure against. Without one they repeated the hero number a
@@ -423,10 +475,10 @@ private fun AllowanceCard(
 }
 
 private fun secondaryLine(allowance: AllowanceSnapshot): String = when {
-    !allowance.hasBudget -> "点这里设置每月生活费，就能看到「本月还能花」和日均可用"
+    !allowance.hasBudget -> "点这里设置每月生活费，就能看到「预算剩余」和剩余日均可用"
     allowance.isOverBudget -> "已超出 ${Money.formatWithSymbol(-allowance.remainingCents)}"
     allowance.daysRemaining <= 0 -> "本月已结束"
-    else -> "日均 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"
+    else -> "剩余日均可用 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"
 }
 
 /**
@@ -508,11 +560,21 @@ private fun DayHeader(group: DayGroup) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.weight(1f))
+        // Both of the day's totals, in the same shape: a day that took in 200 and spent
+        // 30 was reading as a 30 元 day, which is half the story.
         if (group.expenseCents > 0L) {
             Text(
                 text = "支出 ${Money.format(group.expenseCents)}",
                 style = MoneyTextStyles.Small,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (group.incomeCents > 0L) {
+            if (group.expenseCents > 0L) Spacer(Modifier.width(10.dp))
+            Text(
+                text = "收入 ${Money.format(group.incomeCents)}",
+                style = MoneyTextStyles.Small,
+                color = LedgerTheme.colors.income,
             )
         }
     }

@@ -80,7 +80,7 @@ fun OnboardingScreen(
 
         LedgerTypeCard(
             title = "预算模式",
-            detail = "有账户和余额，可以设每月生活费，首页显示「本月还能花」。",
+            detail = "有账户和余额，可以设每月生活费，首页显示「预算剩余」。",
             accent = LedgerTheme.colors.daily,
             selected = state.type == LedgerType.BUDGET,
             onClick = { viewModel.setType(LedgerType.BUDGET) },

@@ -16,9 +16,21 @@ data class AllowanceSnapshot(
     val remainingCents: Long,
     val daysRemaining: Int,
     val dailyAvailableCents: Long,
+    /** Days of the month already gone, the denominator behind [dailySpentCents]. */
+    val daysElapsed: Int = 0,
     val hasBudget: Boolean,
 ) {
     val isOverBudget: Boolean get() = hasBudget && remainingCents < 0
+
+    /**
+     * What the month has actually cost per day so far.
+     *
+     * The counterpart to [dailyAvailableCents]: that one says what may still be spent,
+     * this one says what is being spent. Shown side by side they answer "am I on pace"
+     * without the user doing the division.
+     */
+    val dailySpentCents: Long
+        get() = if (daysElapsed <= 0) 0L else spentCents / daysElapsed
 
     /** 0f..1f, clamped; 0 when there is nothing to measure against. */
     val progress: Float
@@ -65,6 +77,7 @@ object AllowanceCalculator {
             remainingCents = remaining,
             daysRemaining = daysRemaining,
             dailyAvailableCents = dailyAvailable,
+            daysElapsed = DateKeys.daysElapsedInMonth(periodKey, today),
             hasBudget = hasBudget,
         )
     }

@@ -65,7 +65,7 @@ fun PinnedCategoriesScreen(
                 BackChip(onBack)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "记账页显示",
+                    text = "类目快捷选择",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -86,12 +86,20 @@ fun PinnedCategoriesScreen(
 
         item(key = "hint") {
             Text(
+                text = "选择在记账时可快捷选择的类目",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        item(key = "status") {
+            Text(
                 text = if (state.usingDefaults) {
                     "当前显示前 ${state.defaultCount} 个类别，其余收在「更多」里。改动任意一项即转为自定义。"
                 } else {
                     "已自定义：${state.pinnedCount} 个类别直接显示，其余收在「更多」里。"
                 } + "\n收入类别数量少，始终全部显示，不参与这里的收纳。",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

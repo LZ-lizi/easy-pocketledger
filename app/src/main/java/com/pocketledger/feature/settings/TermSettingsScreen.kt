@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.ConfirmDeleteDialog
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -101,7 +102,7 @@ fun TermSettingsScreen(
 
         item(key = "explain") {
             Text(
-                text = "统计页的「学期」按这里的日期区间汇总。",
+                text = "设置【统计】页中学期模式中的日期范围",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -204,6 +205,7 @@ private fun TermEditorDialog(
             existing?.endDateKey ?: TermSettingsViewModel.defaultEndDate(today)
         )
     }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     val rangeValid = TermSettingsViewModel.isValidRange(startKey, endKey)
     val canSave = name.isNotBlank() && rangeValid
@@ -243,7 +245,7 @@ private fun TermEditorDialog(
                 QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
 
                 if (existing != null) {
-                    TextButton(onClick = { onDelete(existing) }) {
+                    TextButton(onClick = { confirmDelete = true }) {
                         Text("删除这个学期", color = LedgerTheme.colors.expense)
                     }
                 }
@@ -270,6 +272,18 @@ private fun TermEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+
+    if (confirmDelete && existing != null) {
+        ConfirmDeleteDialog(
+            title = "删除学期",
+            target = "「${existing.name}」这个日期区间会被移除。",
+            onConfirm = {
+                confirmDelete = false
+                onDelete(existing)
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
 }
 
 /**

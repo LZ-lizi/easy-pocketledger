@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AccountType
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.ConfirmDeleteDialog
 
 /** Palette offered for account accents; index-stable so a colour never moves. */
 private val ACCOUNT_COLORS = listOf(
@@ -301,25 +302,14 @@ fun AccountEditorDialog(
 
     val target = existing
     if (confirmDelete && target != null && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("删除账户") },
-            text = {
-                Text("「${target.name}」会从账户列表移除，已有的流水仍然保留，删除后无法在列表里找回。")
+        ConfirmDeleteDialog(
+            title = "删除账户",
+            target = "「${target.name}」会从账户列表移除，已有的流水仍然保留。",
+            onConfirm = {
+                confirmDelete = false
+                onDelete(target)
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        onDelete(target)
-                    },
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
-            },
+            onDismiss = { confirmDelete = false },
         )
     }
 }

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -42,6 +41,7 @@ import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.ConfirmDeleteDialog
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.components.WheelTimePickerDialog
@@ -76,6 +76,7 @@ fun EditScreen(
         EditHeader(
             loaded = state.loaded,
             missing = state.missing,
+            canDelete = !state.ledgerArchived,
             onClose = onClose,
             onDelete = { confirmDelete = true },
         )
@@ -211,32 +212,38 @@ fun EditScreen(
             }
         }
 
-        SaveRow(
-            enabled = state.canSave,
-            amountCents = state.amountCents,
-            transfer = state.isTransfer,
-            onSave = { viewModel.save(onClose) },
-        )
+        if (state.ledgerArchived) {
+            Text(
+                text = "这个账本已归档，不能再修改记录。需要改动就先在「账本管理」里取消归档。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(14.dp),
+            )
+        } else {
+            SaveRow(
+                enabled = state.canSave,
+                amountCents = state.amountCents,
+                transfer = state.isTransfer,
+                onSave = { viewModel.save(onClose) },
+            )
+        }
 
         Spacer(Modifier.height(24.dp))
     }
 
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("删除这笔记录？") },
-            text = { Text("删除后余额和统计都会立刻跟着更新。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        viewModel.delete(onClose)
-                    }
-                ) { Text("删除", color = LedgerTheme.colors.expense) }
+        ConfirmDeleteDialog(
+            title = "删除这笔记录",
+            target = "这笔记录删除后，余额和统计会立刻跟着更新。",
+            onConfirm = {
+                confirmDelete = false
+                viewModel.delete(onClose)
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
-            },
+            onDismiss = { confirmDelete = false },
         )
     }
 }
@@ -245,6 +252,7 @@ fun EditScreen(
 private fun EditHeader(
     loaded: Boolean,
     missing: Boolean,
+    canDelete: Boolean,
     onClose: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -274,7 +282,7 @@ private fun EditHeader(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.weight(1f))
-        if (loaded && !missing) {
+        if (loaded && !missing && canDelete) {
             Text(
                 text = "删除",
                 style = MaterialTheme.typography.labelLarge,

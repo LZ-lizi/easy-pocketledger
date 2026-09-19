@@ -41,6 +41,8 @@ enum class LedgerIcon {
     CHEVRON_RIGHT,
     /** Three dots: opens the full category list from the entry grid. */
     ELLIPSIS,
+    /** A magnifier: opens the search screen. */
+    SEARCH,
 
     // Expense 大类
     FOOD,
@@ -169,6 +171,22 @@ private fun DrawScope.drawLedgerIcon(icon: LedgerIcon, tint: Color) {
                 drawCircle(tint, w * 0.045f, Offset(w * x, h * 0.58f))
                 drawCircle(tint, w * 0.045f, Offset(w * x, h * 0.72f))
             }
+        }
+
+        /**
+         * A magnifier: a ring with the handle running out to the lower right.
+         *
+         * Drawn as an outline circle rather than a filled one so it stays legible at
+         * 18dp next to the ledger chip, where a solid disc would read as a bullet.
+         */
+        LedgerIcon.SEARCH -> {
+            drawCircle(
+                color = tint,
+                radius = w * 0.26f,
+                center = Offset(w * 0.44f, h * 0.42f),
+                style = outline,
+            )
+            line(0.63f, 0.61f, 0.82f, 0.80f, stroke)
         }
 
         LedgerIcon.WALLET -> {

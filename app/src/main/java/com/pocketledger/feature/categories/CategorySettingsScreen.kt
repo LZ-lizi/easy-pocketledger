@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
+import com.pocketledger.ui.components.ConfirmDeleteDialog
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -108,7 +109,7 @@ fun CategorySettingsScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 if (state.kind == CategoryKind.EXPENSE) {
-                    PillButton("加大类") { viewModel.createTopLevel() }
+                    PillButton("添加大类") { viewModel.createTopLevel() }
                 } else {
                     PillButton("加类别") { viewModel.createTopLevel() }
                 }
@@ -330,6 +331,7 @@ private fun CategoryEditorDialog(
 ) {
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var parentId by remember { mutableStateOf(existing?.parentId ?: defaultParentId) }
+    var confirmDelete by remember { mutableStateOf(false) }
     var iconKey by remember { mutableStateOf(existing?.iconKey ?: "other") }
     var colorArgb by remember {
         mutableStateOf(existing?.colorArgb?.takeIf { it != 0 } ?: COLOR_CHOICES.first())
@@ -453,7 +455,7 @@ private fun CategoryEditorDialog(
                 }
 
                 if (existing != null) {
-                    TextButton(onClick = { onDelete(existing) }) {
+                    TextButton(onClick = { confirmDelete = true }) {
                         Text("删除这个类别", color = LedgerTheme.colors.expense)
                     }
                 }
@@ -490,6 +492,18 @@ private fun CategoryEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+
+    if (confirmDelete && existing != null) {
+        ConfirmDeleteDialog(
+            title = "删除类别",
+            target = "「${existing.name}」会被删除，已经记在它下面的条目会变成未分类。",
+            onConfirm = {
+                confirmDelete = false
+                onDelete(existing)
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
 }
 
 @Composable

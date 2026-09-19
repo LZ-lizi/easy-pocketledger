@@ -58,7 +58,10 @@ import com.pocketledger.feature.installments.InstallmentSettingsScreen
 import com.pocketledger.feature.installments.InstallmentSettingsViewModel
 import com.pocketledger.feature.onboarding.OnboardingScreen
 import com.pocketledger.feature.onboarding.OnboardingViewModel
+import com.pocketledger.feature.search.SearchScreen
+import com.pocketledger.feature.search.SearchViewModel
 import com.pocketledger.feature.settings.AboutScreen
+import com.pocketledger.feature.settings.FeatureGuideScreen
 import com.pocketledger.feature.settings.LedgerSettingsScreen
 import com.pocketledger.feature.settings.LedgerSettingsViewModel
 import com.pocketledger.feature.settings.PinnedCategoriesScreen
@@ -66,6 +69,7 @@ import com.pocketledger.feature.settings.PinnedCategoriesViewModel
 import com.pocketledger.feature.settings.SettingsScreen
 import com.pocketledger.feature.settings.TermSettingsScreen
 import com.pocketledger.feature.settings.TermSettingsViewModel
+import com.pocketledger.feature.settings.TermsOfUseScreen
 import com.pocketledger.feature.stats.StatsScreen
 import com.pocketledger.feature.stats.StatsViewModel
 import com.pocketledger.ui.components.LedgerIcon
@@ -93,6 +97,9 @@ object Routes {
     const val IMPORT = "import"
     const val EXPORT = "export"
     const val ABOUT = "about"
+    const val FEATURES = "features"
+    const val TERMS_OF_USE = "termsOfUse"
+    const val SEARCH = "search"
 
     fun edit(transactionId: Long): String = "$EDIT/$transactionId"
 
@@ -115,6 +122,72 @@ private val EDIT_ROUTE = "${Routes.EDIT}/{${Routes.EDIT_ARG}}"
 private val DETAIL_ROUTE = "${Routes.DETAIL}/{${Routes.DETAIL_ARG}}"
 private val BUDGET_ROUTE = "${Routes.BUDGET}/{${Routes.BUDGET_ARG}}"
 
+/**
+ * The pages that live under the 设置 tab.
+ *
+ * Every one of them is reached from the settings menu, so the tab stays lit while they
+ * are open. Without this the dock lost its selection the moment you opened a sub-page --
+ * `currentRoute == tab.route` was false for all of them -- and the bar read as though
+ * nothing was selected at all.
+ */
+private val SETTINGS_SUB_ROUTES = setOf(
+    Routes.LEDGERS,
+    Routes.CATEGORIES,
+    Routes.INSTALLMENTS,
+    Routes.PINNED,
+    Routes.IMPORT,
+    Routes.EXPORT,
+    Routes.ABOUT,
+    Routes.TERMS,
+    Routes.FEATURES,
+    Routes.TERMS_OF_USE,
+    BUDGET_ROUTE,
+)
+
+/**
+ * Which dock tab owns [route], or null when no tab does.
+ *
+ * The entry, edit and detail screens take the whole window and hide the bar, so their
+ * mapping only matters while a transition is still running.
+ */
+private fun owningTab(route: String?): String? = when {
+    route == null -> null
+    route == Routes.LEDGER -> Routes.LEDGER
+    route == Routes.STATS -> Routes.STATS
+    route == Routes.ACCOUNTS -> Routes.ACCOUNTS
+    route == Routes.SETTINGS || route in SETTINGS_SUB_ROUTES -> Routes.SETTINGS
+    route.startsWith("${Routes.DETAIL}/") || route.startsWith("${Routes.EDIT}/") -> Routes.LEDGER
+    route == Routes.ENTRY || route == Routes.SEARCH -> Routes.LEDGER
+    else -> null
+}
+
+/** Dock order, or -1 for a route that is not a tab. */
+private fun tabIndexOf(route: String?): Int {
+    val owner = owningTab(route) ?: return -1
+    return TABS.indexOfFirst { it.route == owner }
+}
+
+/**
+ * Which way the content should travel.
+ *
+ * Tapping 账户 from 统计 moves right, so the new screen comes in from the right; tapping
+ * back the other way has to come in from the left. The transitions used to hardcode a
+ * right-hand offset, so moving left still slid right-to-left and the motion contradicted
+ * the tap.
+ */
+private fun isForward(from: String?, to: String?): Boolean {
+    val a = tabIndexOf(from)
+    val b = tabIndexOf(to)
+    return when {
+        a >= 0 && b >= 0 -> b > a
+        // Deeper into a tab, or a full-window page opened from one, travels forward.
+        a >= 0 -> true
+        // Back up to a tab travels backward.
+        b >= 0 -> false
+        else -> true
+    }
+}
+
 /** Milliseconds for the screen enter/exit slides. Tuned to feel immediate. */
 private const val TRANSITION_MS = 150
 
@@ -136,6 +209,8 @@ fun AppShell(
     val container = rememberAppContainer()
     val startupComplete by container.startupComplete.collectAsStateWithLifecycle()
     val ledgerId by container.repository.selectedLedgerId.collectAsStateWithLifecycle()
+    val selectedLedger by container.repository.observeSelectedLedger()
+        .collectAsStateWithLifecycle(initialValue = null)
 
     // There is no server to push a warning, so the budget check runs whenever the app
     // comes back to the foreground: that is the moment the user is about to look.
@@ -161,6 +236,7 @@ fun AppShell(
 
         else -> LedgerNavHost(
             startEntry = startEntry,
+            ledgerArchived = selectedLedger?.isArchived == true,
             onStartEntryHandled = onStartEntryHandled,
         )
     }
@@ -186,6 +262,7 @@ private fun StartupPlaceholder() {
 @Composable
 private fun LedgerNavHost(
     startEntry: Boolean,
+    ledgerArchived: Boolean,
     onStartEntryHandled: () -> Unit,
 ) {
     val navController = rememberNavController()
@@ -207,21 +284,31 @@ private fun LedgerNavHost(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (!isOverlay) {
-                LedgerBottomBar(currentRoute = currentRoute) { target ->
-                    navController.navigate(target) {
-                        // Keep each tab's own state and avoid stacking duplicates.
-                        popUpTo(Routes.LEDGER) { saveState = true }
-                        launchSingleTop = true
-                        // Settings always reopens at its top level: coming back to a
-                        // sub-page you left earlier is disorienting when you tapped the
-                        // tab expecting the menu.
-                        restoreState = target != Routes.SETTINGS
-                    }
-                }
+                LedgerBottomBar(
+                    selectedTab = owningTab(currentRoute),
+                    onNavigate = { target ->
+                        // Re-tapping the tab you are already in used to re-run the
+                        // navigation and its animation, so the screen visibly twitched
+                        // for a tap that changed nothing.
+                        if (owningTab(currentRoute) != target) {
+                            navController.navigate(target) {
+                                // Keep each tab's own state and avoid stacking duplicates.
+                                popUpTo(Routes.LEDGER) { saveState = true }
+                                launchSingleTop = true
+                                // Settings always reopens at its top level: coming back to
+                                // a sub-page you left earlier is disorienting when you
+                                // tapped the tab expecting the menu.
+                                restoreState = target != Routes.SETTINGS
+                            }
+                        }
+                    },
+                )
             }
         },
         floatingActionButton = {
-            if (currentRoute == Routes.LEDGER) {
+            // An archived ledger is put away: no new entries, matching the edit screen
+            // refusing to change the ones already there.
+            if (currentRoute == Routes.LEDGER && !ledgerArchived) {
                 FloatingActionButton(
                     onClick = { navController.navigate(Routes.ENTRY) },
                     shape = CircleShape,
@@ -240,19 +327,33 @@ private fun LedgerNavHost(
         NavHost(
             navController = navController,
             startDestination = Routes.LEDGER,
-            // Short, uniform transitions. The defaults are long enough to feel like
-            // waiting when moving between tabs you already know.
+            // Short, uniform transitions whose direction follows the tab that was tapped:
+            // moving right slides in from the right, moving left from the left.
             enterTransition = {
+                val forward = isForward(initialState.destination.route, targetState.destination.route)
                 slideInHorizontally(
-                    initialOffsetX = { it / 8 },
+                    initialOffsetX = { width -> if (forward) width / 8 else -width / 8 },
                     animationSpec = tween(TRANSITION_MS),
                 ) + fadeIn(tween(TRANSITION_MS))
             },
-            exitTransition = { fadeOut(tween(TRANSITION_MS / 2)) },
-            popEnterTransition = { fadeIn(tween(TRANSITION_MS / 2)) },
+            exitTransition = {
+                val forward = isForward(initialState.destination.route, targetState.destination.route)
+                slideOutHorizontally(
+                    targetOffsetX = { width -> if (forward) -width / 8 else width / 8 },
+                    animationSpec = tween(TRANSITION_MS),
+                ) + fadeOut(tween(TRANSITION_MS))
+            },
+            // Back always reverses the direction of travel, so popping never slides the
+            // same way as the push it is undoing.
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { width -> -width / 8 },
+                    animationSpec = tween(TRANSITION_MS),
+                ) + fadeIn(tween(TRANSITION_MS))
+            },
             popExitTransition = {
                 slideOutHorizontally(
-                    targetOffsetX = { it / 8 },
+                    targetOffsetX = { width -> width / 8 },
                     animationSpec = tween(TRANSITION_MS),
                 ) + fadeOut(tween(TRANSITION_MS))
             },
@@ -262,6 +363,17 @@ private fun LedgerNavHost(
                 HomeScreen(
                     viewModel = viewModel,
                     contentPadding = padding,
+                    onOpenTransaction = { id -> navController.navigate(Routes.detail(id)) },
+                    onOpenSearch = { navController.navigate(Routes.SEARCH) },
+                )
+            }
+
+            composable(Routes.SEARCH) {
+                val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
+                SearchScreen(
+                    viewModel = viewModel,
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
                     onOpenTransaction = { id -> navController.navigate(Routes.detail(id)) },
                 )
             }
@@ -366,6 +478,22 @@ private fun LedgerNavHost(
                 AboutScreen(
                     contentPadding = padding,
                     onBack = { navController.popBackStack() },
+                    onOpenFeatures = { navController.navigate(Routes.FEATURES) },
+                    onOpenTermsOfUse = { navController.navigate(Routes.TERMS_OF_USE) },
+                )
+            }
+
+            composable(Routes.FEATURES) {
+                FeatureGuideScreen(
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.TERMS_OF_USE) {
+                TermsOfUseScreen(
+                    contentPadding = padding,
+                    onBack = { navController.popBackStack() },
                 )
             }
 
@@ -421,13 +549,13 @@ private fun LedgerNavHost(
 }
 
 @Composable
-private fun LedgerBottomBar(currentRoute: String?, onNavigate: (String) -> Unit) {
+private fun LedgerBottomBar(selectedTab: String?, onNavigate: (String) -> Unit) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
     ) {
         TABS.forEach { tab ->
-            val selected = currentRoute == tab.route
+            val selected = selectedTab == tab.route
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigate(tab.route) },

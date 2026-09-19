@@ -109,8 +109,7 @@ fun ExportScreen(
 
         item(key = "hint") {
             Text(
-                text = "导出当前账本（${state.ledgerName.ifBlank { "账本" }}）为 CSV 文件。" +
-                    "带 UTF-8 BOM，Excel 和 WPS 直接双击打开不会乱码。",
+                text = "导出当前账本（${state.ledgerName.ifBlank { "账本" }}）为 CSV 文件。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -76,4 +76,31 @@ class MoneyTest {
         assertEquals("+¥2,500.00", Money.formatSigned(250000, negative = false))
         assertEquals("+¥128.00", Money.formatSigned(-12800, negative = false))
     }
+
+    /**
+     * Calendar cells show the real figure below a yuan.
+     *
+     * They used to print "<1" for anything under ¥1, which made a ¥0.08 red packet and
+     * a ¥0.90 one read identically -- and the point of the cell is to say which days had
+     * money move, not merely that some did.
+     */
+    @Test
+    fun `tiny form keeps the real figure below one yuan`() {
+        assertEquals("0.08", Money.formatTiny(8))
+        assertEquals("0.50", Money.formatTiny(50))
+        assertEquals("0.99", Money.formatTiny(99))
+    }
+
+    @Test
+    fun `tiny form still rounds to whole yuan from one yuan up`() {
+        assertEquals("1", Money.formatTiny(100))
+        assertEquals("12", Money.formatTiny(1299))
+        assertEquals("0", Money.formatTiny(0))
+    }
+
+    @Test
+    fun `tiny form switches to wan for five figures`() {
+        assertEquals("1万", Money.formatTiny(1_000_000))
+        assertEquals("1.2万", Money.formatTiny(1_200_000))
+    }
 }

@@ -97,6 +97,31 @@ class LedgerSettingsViewModel(private val container: AppContainer) : ViewModel()
         }
     }
 
+    /**
+     * Removes a ledger and everything filed under it.
+     *
+     * The last remaining ledger is never deleted: `selectedLedgerId` would be left
+     * pointing at nothing, and every screen in the app reads through it, so the result
+     * would be an app with no book rather than an empty one. The caller hides the
+     * action in that case; this is the backstop.
+     *
+     * If the deleted ledger was the selected one the app moves to another, because
+     * staying on a ledger that no longer exists shows an empty screen with no way back.
+     */
+    fun deleteLedger(ledger: LedgerEntity) {
+        val ledgers = uiState.value.ledgers
+        if (ledgers.size <= 1) return
+        viewModelScope.launch {
+            val next = ledgers.firstOrNull { it.id != ledger.id && !it.isArchived }
+                ?: ledgers.firstOrNull { it.id != ledger.id }
+            repository.deleteLedger(ledger.id)
+            if (uiState.value.selectedId == ledger.id) {
+                next?.let { repository.selectLedger(it.id) }
+            }
+            editor.value = null
+        }
+    }
+
     companion object {
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {

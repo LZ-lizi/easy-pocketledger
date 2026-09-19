@@ -20,42 +20,24 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.pocketledger.ui.components.LedgerIcon
-import com.pocketledger.ui.components.LedgerIconView
 
 /**
- * Version, the feature guide and the user agreement.
+ * The user agreement.
  *
- * The storage note lives in 用户协议 rather than here: it is a statement about what the
- * app does with the user's data, which belongs with the terms rather than in a list of
- * facts about the build.
- *
- * The current ledger is deliberately not listed -- it is already named in the header of
- * 明细 and 账户, and repeating it in an "about" page answered a question nobody opens an
- * about page to ask.
+ * Currently a shell holding the one clause that is already true: where the data lives.
+ * The remaining terms are to be written, and the section list is left in place so the
+ * page has a shape to grow into rather than being an empty screen.
  */
 @Composable
-fun AboutScreen(
+fun TermsOfUseScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
-    onOpenFeatures: () -> Unit,
-    onOpenTermsOfUse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-
-    val versionName = remember(context) {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "—"
-    }
-
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(
@@ -84,64 +66,34 @@ fun AboutScreen(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "关于",
+                    text = "用户协议",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
 
-        item(key = "app") {
-            InfoCard("记账本", "版本 $versionName")
+        item(key = "storage") {
+            SectionCard(
+                title = "数据存放",
+                body = "全部数据保存在本机数据库里，不联网、不上传、没有账号。" +
+                    "卸载 App 会一并删除，重要数据请自行导出备份。",
+            )
         }
-        item(key = "features") {
-            LinkCard("功能介绍", "逐项说明记账本的各项功能", onOpenFeatures)
-        }
-        item(key = "terms") {
-            LinkCard("用户协议", "数据存放与使用条款", onOpenTermsOfUse)
-        }
-    }
-}
 
-/** A card that opens another page. */
-@Composable
-private fun LinkCard(title: String, detail: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            LedgerIconView(
-                icon = LedgerIcon.CHEVRON_RIGHT,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                size = 18.dp,
+        item(key = "pending") {
+            Text(
+                text = "其余条款待补充。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp),
             )
         }
     }
 }
 
 @Composable
-private fun InfoCard(title: String, detail: String) {
+private fun SectionCard(title: String, body: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -153,9 +105,9 @@ private fun InfoCard(title: String, detail: String) {
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
-                text = detail,
+                text = body,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

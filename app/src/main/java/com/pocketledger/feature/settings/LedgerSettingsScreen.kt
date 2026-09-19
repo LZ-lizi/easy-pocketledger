@@ -44,10 +44,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
+import com.pocketledger.ui.components.ConfirmDeleteDialog
 import com.pocketledger.ui.theme.LedgerTheme
 
 /**
- * Ledger list: switch, rename, archive, create.
+ * Ledger list: switch, rename, archive, delete, create.
  *
  * Everything else in the app is scoped to whichever ledger is selected here, so this
  * is the one screen where that choice is made.
@@ -103,8 +104,7 @@ fun LedgerSettingsScreen(
 
         item(key = "hint") {
             Text(
-                text = "这里只管理账本本身：新建、改名、归档、设置各自的预算。" +
-                    "要换一个账本看账，用「明细」或「账户」页右上角的账本按钮。",
+                text = "在这里新建、删除、更改账本设置",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -123,9 +123,11 @@ fun LedgerSettingsScreen(
     if (state.editorVisible) {
         LedgerEditorDialog(
             existing = state.editorTarget,
+            canDelete = state.ledgers.size > 1,
             onDismiss = viewModel::dismissEditor,
             onSave = viewModel::save,
             onArchive = viewModel::toggleArchive,
+            onDelete = viewModel::deleteLedger,
         )
     }
 }
@@ -234,12 +236,15 @@ private fun LedgerCard(
 @Composable
 private fun LedgerEditorDialog(
     existing: LedgerEntity?,
+    canDelete: Boolean,
     onDismiss: () -> Unit,
     onSave: (LedgerEntity) -> Unit,
     onArchive: (LedgerEntity) -> Unit,
+    onDelete: (LedgerEntity) -> Unit,
 ) {
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var type by remember { mutableStateOf(existing?.type ?: LedgerType.BUDGET) }
+    var confirmingDelete by remember { mutableStateOf(false) }
     // The mode decides whether accounts and budgets exist at all, so changing it on a
     // ledger that already holds data would silently strand that data. Locked after creation.
     val typeLocked = existing != null
@@ -284,19 +289,40 @@ private fun LedgerEditorDialog(
                 }
 
                 if (existing != null) {
-                    // An outlined button, not a bare text button: archiving is the one
-                    // destructive action in this dialog and it must not read as a label.
-                    OutlinedButton(
-                        onClick = { onArchive(existing) },
-                        modifier = Modifier.fillMaxWidth(),
-                        border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = LedgerTheme.colors.expense,
-                        ),
-                    ) {
+                    // Archiving and deleting side by side, deliberately the same shape:
+                    // one puts the ledger away and one destroys it, and the pair only
+                    // reads correctly when neither is hidden behind a menu.
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { onArchive(existing) },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = LedgerTheme.colors.expense,
+                            ),
+                        ) {
+                            Text(
+                                text = if (existing.isArchived) "取消归档" else "归档",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { confirmingDelete = true },
+                            modifier = Modifier.weight(1f),
+                            enabled = canDelete,
+                            border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = LedgerTheme.colors.expense,
+                            ),
+                        ) {
+                            Text(text = "删除", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    if (!canDelete) {
                         Text(
-                            text = if (existing.isArchived) "取消归档" else "归档这个账本",
-                            style = MaterialTheme.typography.labelLarge,
+                            text = "至少要保留一个账本。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -325,6 +351,15 @@ private fun LedgerEditorDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+
+    if (confirmingDelete && existing != null) {
+        ConfirmDeleteDialog(
+            title = "删除账本",
+            target = "「${existing.name}」和它下面的所有记账条目都会被删除。",
+            onConfirm = { onDelete(existing) },
+            onDismiss = { confirmingDelete = false },
+        )
+    }
 }
 
 @Composable

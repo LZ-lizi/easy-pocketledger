@@ -107,6 +107,21 @@ fun DetailScreen(
         item(key = "fields") { FieldsCard(state) }
 
         item(key = "edit") {
+            if (state.ledgerArchived) {
+                // Read-only rather than a disabled button: a greyed-out control invites
+                // tapping and never explains itself.
+                Text(
+                    text = "这个账本已归档，不能再修改记录。需要改动就先在「账本管理」里取消归档。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(14.dp),
+                )
+                return@item
+            }
             val accent = when (state.type) {
                 TxnType.INCOME -> LedgerTheme.colors.income
                 TxnType.TRANSFER -> LedgerTheme.colors.transfer

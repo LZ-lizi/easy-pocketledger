@@ -52,7 +52,10 @@ object Money {
         if (abs == 0L) return "0"
         val yuan = abs / 100
         return when {
-            yuan == 0L -> "<1"
+            // Under a yuan the exact figure still fits the cell, and "<1" threw away the
+            // difference between 0.01 and 0.99 -- a real red packet worth 0.08 read the
+            // same as one worth 0.90.
+            yuan == 0L -> format(abs)
             yuan < 10_000L -> yuan.toString()
             else -> {
                 val tenths = yuan / 1_000L          // tenths of 万

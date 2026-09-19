@@ -59,6 +59,24 @@ object DateKeys {
 
     fun daysInMonth(monthKey: String): Int = YearMonth.parse(monthKey).lengthOfMonth()
 
+    /**
+     * Days of the month that have already happened, **including today**.
+     *
+     * The denominator behind 「已记账日均支出」, and the counterpart to
+     * [daysRemainingInMonth]. A month that has not started has nothing recorded against
+     * it, so it returns 0 rather than a negative count; a month that is over is counted
+     * in full, because all of its spending is known.
+     */
+    fun daysElapsedInMonth(monthKey: String, today: LocalDate): Int {
+        val start = monthStart(monthKey)
+        val end = monthEnd(monthKey)
+        return when {
+            today < start -> 0
+            today > end -> daysInMonth(monthKey)
+            else -> (today.toEpochDay() - start.toEpochDay()).toInt() + 1
+        }
+    }
+
     /** `2026-09` -> `2026年9月`, used by the month switcher. */
     fun monthLabel(monthKey: String): String {
         val month = YearMonth.parse(monthKey)

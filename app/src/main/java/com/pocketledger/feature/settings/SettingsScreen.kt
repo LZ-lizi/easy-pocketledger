@@ -24,7 +24,6 @@ import com.pocketledger.ui.components.LedgerIconView
 
 private class SettingsEntry(
     val title: String,
-    val detail: String,
     val onClick: () -> Unit,
 )
 
@@ -57,29 +56,29 @@ fun SettingsScreen(
         SettingsSection(
             title = "账本",
             entries = listOf(
-                SettingsEntry("账本管理", "新建、改名、归档，以及每个账本自己的预算", onOpenLedgers),
+                SettingsEntry("账本管理", onOpenLedgers),
             ),
         ),
         SettingsSection(
             title = "记账",
             entries = listOf(
-                SettingsEntry("类别管理", "增删改类别，调整大类归属", onOpenCategories),
-                SettingsEntry("记账页显示", "选择哪些类别直接显示，其余收进「更多」", onOpenPinned),
-                SettingsEntry("月付", "分期计划与到期自动扣款", onOpenInstallments),
-                SettingsEntry("学期设置", "统计页「学期」用的日期区间", onOpenTerms),
+                SettingsEntry("类别管理", onOpenCategories),
+                SettingsEntry("类目快捷选择", onOpenPinned),
+                SettingsEntry("月付管理", onOpenInstallments),
+                SettingsEntry("学期设置", onOpenTerms),
             ),
         ),
         SettingsSection(
             title = "数据",
             entries = listOf(
-                SettingsEntry("导入账单", "从微信、支付宝导出的账单批量记账", onOpenImport),
-                SettingsEntry("导出数据", "把当前账本导出为 CSV", onOpenExport),
+                SettingsEntry("导入账单", onOpenImport),
+                SettingsEntry("导出数据", onOpenExport),
             ),
         ),
         SettingsSection(
             title = "关于",
             entries = listOf(
-                SettingsEntry("关于记账本", "版本、数据存放位置", onOpenAbout),
+                SettingsEntry("关于记账本", onOpenAbout),
             ),
         ),
     )
@@ -132,16 +131,13 @@ private fun SettingsCard(entry: SettingsEntry) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
+                // No sub-description: the titles are self-explanatory, and a line of
+                // grey text under every row made the list longer than it needed to be
+                // while telling the user nothing they could not read off the title.
                 Text(
                     text = entry.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = entry.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.width(12.dp))

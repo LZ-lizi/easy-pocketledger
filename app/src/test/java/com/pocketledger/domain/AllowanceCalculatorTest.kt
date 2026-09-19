@@ -101,4 +101,34 @@ class AllowanceCalculatorTest {
         val projected = AllowanceCalculator.projectedMonthSpend(160000, month, today)
         assertEquals(300000L, projected)
     }
+
+    @Test
+    fun `recorded daily spending is the month divided by the days that have happened`() {
+        // The counterpart figure to 剩余日均可用: what is actually being spent per day.
+        // 16 days elapsed by the 16th, so 160000 over 16 days is 10000 a day.
+        val snapshot = compute(budget = 300000, spent = 160000)
+        assertEquals(16, snapshot.daysElapsed)
+        assertEquals(10000L, snapshot.dailySpentCents)
+    }
+
+    @Test
+    fun `recorded daily spending floors rather than rounding up`() {
+        val snapshot = compute(budget = 300000, spent = 100001)
+        // 100001 / 16 = 6250.06 -> 6250.
+        assertEquals(6250L, snapshot.dailySpentCents)
+    }
+
+    @Test
+    fun `a month with no day elapsed reports no recorded daily figure`() {
+        val snapshot = compute(budget = 300000, spent = 5000, on = LocalDate.of(2026, 8, 20))
+        assertEquals(0, snapshot.daysElapsed)
+        assertEquals(0L, snapshot.dailySpentCents)
+    }
+
+    @Test
+    fun `a finished month divides by its full length`() {
+        val snapshot = compute(budget = 300000, spent = 30000, on = LocalDate.of(2026, 10, 5))
+        assertEquals(30, snapshot.daysElapsed)
+        assertEquals(1000L, snapshot.dailySpentCents)
+    }
 }

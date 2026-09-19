@@ -35,6 +35,7 @@ import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TagEntity
 import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.entity.TxnEntity
+import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.DateKeys
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,6 +51,15 @@ import kotlinx.coroutines.flow.flowOf
 /** Wide enough to cover any date a person will enter, and still a plain string range. */
 private const val WIDE_START_KEY = "0000-01-01"
 private const val WIDE_END_KEY = "9999-12-31"
+
+/**
+ * How many search hits are shown.
+ *
+ * A ceiling rather than paging: a personal ledger's whole history is a few thousand
+ * rows, and the screen is for finding one of them, so the newest few hundred matching a
+ * filter is already more than anyone scrolls.
+ */
+private const val SEARCH_LIMIT = 300
 
 /** The small, read-only summary a home-screen widget renders. */
 data class WidgetSnapshot(
@@ -317,6 +327,48 @@ class LedgerRepository(
     }
 
     suspend fun transaction(id: Long): TxnEntity? = txnDao.byId(id)
+
+    /**
+     * Rows matching a search, scoped to the selected ledger.
+     *
+     * A null argument switches that filter off; see [TxnDao.observeSearch].
+     */
+    fun observeSearch(
+        startKey: String?,
+        endKey: String?,
+        type: TxnType?,
+        accountId: Long?,
+        categoryId: Long?,
+        minCents: Long?,
+        maxCents: Long?,
+        keyword: String?,
+        limit: Int = SEARCH_LIMIT,
+    ): Flow<List<TxnRow>> = scoped { ledgerId ->
+        txnDao.observeSearch(
+            ledgerId = ledgerId,
+            startKey = startKey,
+            endKey = endKey,
+            type = type?.name,
+            accountId = accountId,
+            categoryId = categoryId,
+            minCents = minCents,
+            maxCents = maxCents,
+            keyword = keyword?.trim()?.takeIf { it.isNotEmpty() },
+            limit = limit,
+        )
+    }
+
+    /**
+     * One entry, watched.
+     *
+     * Deliberately not ledger-scoped: an id is unique across the database, and the detail
+     * screen is always opened from a row whose ledger is already known.
+     */
+    fun observeTransaction(id: Long): Flow<TxnEntity?> = txnDao.observeById(id)
+
+    /** The selected ledger's row, for screens that need its metadata once. */
+    suspend fun selectedLedger(): LedgerEntity? =
+        selectedLedgerId.value?.let { ledgerDao.byId(it) }
 
     suspend fun addTransaction(txn: TxnEntity): Long =
         txnDao.insert(txn.copy(ledgerId = writeLedgerId()))

@@ -108,7 +108,7 @@ private fun WidgetBody(snapshot: WidgetSnapshot?, wide: Boolean, context: Contex
             Text(
                 text = when {
                     snapshot.ledgerType == LedgerType.ACCUMULATE -> "本月支出"
-                    remaining != null -> "本月还能花"
+                    remaining != null -> "预算剩余"
                     else -> "本月支出"
                 },
                 style = TextStyle(

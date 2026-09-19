@@ -76,6 +76,74 @@ interface TxnDao {
     ): Flow<List<TxnRow>>
 
     /**
+     * Rows matching a search, newest first.
+     *
+     * One query with nullable filters rather than a query per combination: Room cannot
+     * compose optional predicates, and building the SQL as a string would lose the
+     * compile-time column checking that catches a rename here. `NULL` means "this
+     * filter is off" for every parameter.
+     *
+     * The keyword matches 交易对象 and 备注, the two free-text fields; it deliberately
+     * does not search 交易单号, which nobody types from memory.
+     */
+    @Query(
+        """
+        SELECT t.id AS id,
+               t.type AS type,
+               t.amountCents AS amountCents,
+               t.feeCents AS feeCents,
+               t.categoryId AS categoryId,
+               c.name AS categoryName,
+               c.iconKey AS categoryIconKey,
+               c.colorArgb AS categoryColorArgb,
+               c.parentId AS mainCategoryId,
+               t.accountId AS accountId,
+               a.name AS accountName,
+               t.toAccountId AS toAccountId,
+               ta.name AS toAccountName,
+               t.merchant AS merchant,
+               t.note AS note,
+               t.happenedAt AS happenedAt,
+               t.localDateKey AS localDateKey,
+               t.source AS source,
+               t.isExcludedFromStats AS isExcludedFromStats,
+               t.importBatchId AS importBatchId
+        FROM txn t
+        LEFT JOIN category c ON c.id = t.categoryId
+        LEFT JOIN account a ON a.id = t.accountId
+        LEFT JOIN account ta ON ta.id = t.toAccountId
+        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL
+          AND (:startKey IS NULL OR t.localDateKey >= :startKey)
+          AND (:endKey IS NULL OR t.localDateKey <= :endKey)
+          AND (:type IS NULL OR t.type = :type)
+          AND (:accountId IS NULL
+               OR t.accountId = :accountId OR t.toAccountId = :accountId)
+          AND (:categoryId IS NULL
+               OR t.categoryId = :categoryId
+               OR c.parentId = :categoryId)
+          AND (:minCents IS NULL OR t.amountCents >= :minCents)
+          AND (:maxCents IS NULL OR t.amountCents <= :maxCents)
+          AND (:keyword IS NULL
+               OR t.merchant LIKE '%' || :keyword || '%'
+               OR t.note LIKE '%' || :keyword || '%')
+        ORDER BY t.happenedAt DESC, t.id DESC
+        LIMIT :limit
+        """
+    )
+    fun observeSearch(
+        ledgerId: Long,
+        startKey: String?,
+        endKey: String?,
+        type: String?,
+        accountId: Long?,
+        categoryId: Long?,
+        minCents: Long?,
+        maxCents: Long?,
+        keyword: String?,
+        limit: Int,
+    ): Flow<List<TxnRow>>
+
+    /**
      * Range totals for the period header.
      *
      * A transfer's fee is a real cost, so it counts as expense; the transferred
@@ -201,6 +269,20 @@ interface TxnDao {
 
     @Query("SELECT * FROM txn WHERE id = :id")
     suspend fun byId(id: Long): TxnEntity?
+
+    /**
+     * One entry, watched.
+     *
+     * The detail screen read the row once when its ViewModel was created, and that
+     * ViewModel survives the trip to the edit screen -- so editing an entry and coming
+     * back showed the values from before the edit and nothing re-ran. Observing it makes
+     * the screen follow the data instead of a snapshot of it.
+     *
+     * `deletedAt IS NULL` because a deleted entry has no detail to show; the screen turns
+     * that into 「这笔记录已经不存在了」.
+     */
+    @Query("SELECT * FROM txn WHERE id = :id AND deletedAt IS NULL")
+    fun observeById(id: Long): Flow<TxnEntity?>
 
     @Query(
         """

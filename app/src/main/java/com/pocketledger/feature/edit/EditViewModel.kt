@@ -54,6 +54,13 @@ data class EditUiState(
     /** The stored [TimeMode], preserved when neither date nor time is touched. */
     val storedTimeMode: TimeMode = TimeMode.AUTO,
     val isExcludedFromStats: Boolean = false,
+    /**
+     * True when the ledger holding this entry has been archived.
+     *
+     * Archived means put away: the entry stays readable and stops being writable, so the
+     * screen hides its save and delete actions rather than failing after the fact.
+     */
+    val ledgerArchived: Boolean = false,
 ) {
     val isTransfer: Boolean get() = type == TxnType.TRANSFER
 
@@ -135,6 +142,10 @@ class EditViewModel(
     val uiState: StateFlow<EditUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            val archived = repository.selectedLedger()?.isArchived == true
+            if (archived) _uiState.update { it.copy(ledgerArchived = true) }
+        }
         viewModelScope.launch {
             val txn = repository.transaction(transactionId)
             if (txn == null) {
@@ -246,6 +257,9 @@ class EditViewModel(
 
     fun save(onDone: () -> Unit) {
         val state = _uiState.value
+        // Backstop for the archived rule: the screen hides these actions, and this makes
+        // sure no other path can write into a ledger that has been put away.
+        if (state.ledgerArchived) return
         if (!state.canSave) return
         val cents = Money.parseYuanToCents(state.amountInput) ?: return
         val accountId = state.accountId ?: return
@@ -273,6 +287,7 @@ class EditViewModel(
     }
 
     fun delete(onDone: () -> Unit) {
+        if (_uiState.value.ledgerArchived) return
         viewModelScope.launch {
             repository.deleteTransaction(transactionId)
             onDone()

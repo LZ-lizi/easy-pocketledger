@@ -91,7 +91,7 @@ fun InstallmentSettingsScreen(
                 BackChip(onBack)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "月付",
+                    text = "月付管理",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -114,8 +114,7 @@ fun InstallmentSettingsScreen(
 
         item(key = "hint") {
             Text(
-                text = "到期当天会自动在本账本生成一笔扣款，同一期只生成一次。" +
-                    "打开 App 时补生成，所以停用几天再打开也不会漏。",
+                text = "管理已添加的【月付】条目，进行添加、删除或编辑",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -268,12 +268,6 @@ private fun IntroCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
-                text = "导入前会先列出每一条让你确认：收入/支出、分类、金额都能当场改，" +
-                    "重复的记录会自动勾掉；导入后可以整批撤销，也可以再导入一次更新的账单补齐新记录。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        startEntry = intent?.getBooleanExtra(EXTRA_START_ENTRY, false) == true
+        startEntry = consumeStartEntry()
         setContent {
             PocketLedgerTheme {
                 NotificationPermissionRequest()
@@ -46,9 +46,26 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_START_ENTRY, false)) {
-            startEntry = true
-        }
+        startEntry = consumeStartEntry()
+    }
+
+    /**
+     * Reads the widget's "open the keypad" extra and removes it.
+     *
+     * Removing it is the whole point. The extra describes one tap, but it lives on the
+     * Intent, which outlives this call -- so leaving it in place meant every activity
+     * recreation re-read it as true and opened the keypad again with nobody having
+     * touched anything. Rotating the phone, or the system restoring the activity after
+     * reclaiming memory, was enough to trigger it, and once the widget had been tapped
+     * once the Intent kept the extra for the life of the task.
+     *
+     * Consuming it here makes the extra mean "this launch came from a widget tap" rather
+     * than "a widget tap has happened at some point".
+     */
+    private fun consumeStartEntry(): Boolean {
+        val wanted = intent?.getBooleanExtra(EXTRA_START_ENTRY, false) == true
+        if (wanted) intent?.removeExtra(EXTRA_START_ENTRY)
+        return wanted
     }
 
     companion object {

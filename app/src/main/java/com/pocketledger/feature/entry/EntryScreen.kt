@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -514,6 +515,7 @@ private fun CategoryGroupBlock(
  * here. Everything the plan needs to start generating charges is collected in one
  * place, and the per-instalment figure updates live.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MonthlyPanel(
     state: EntryUiState,
@@ -528,19 +530,22 @@ private fun MonthlyPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedTextField(
-            value = state.planName,
-            onValueChange = onNameChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("名称", style = MaterialTheme.typography.bodySmall) },
-            textStyle = MaterialTheme.typography.bodyMedium,
-        )
-
+        // Two rows of fields instead of three. The panel sits in a fixed-height slot
+        // between the amount and the keypad, so every row of inputs it spends is a row
+        // the category chips below lose -- and the chips were the part being cut off.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.planName,
+                onValueChange = onNameChange,
+                modifier = Modifier.weight(1.8f),
+                singleLine = true,
+                label = { Text("名称", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
             OutlinedTextField(
                 value = state.planPeriods,
                 onValueChange = onPeriodsChange,
@@ -550,6 +555,9 @@ private fun MonthlyPanel(
                 textStyle = MaterialTheme.typography.bodyMedium,
                 isError = state.planPeriodsValue == null,
             )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = state.planRepayDay,
                 onValueChange = onRepayDayChange,
@@ -559,17 +567,16 @@ private fun MonthlyPanel(
                 textStyle = MaterialTheme.typography.bodyMedium,
                 isError = state.planRepayDayValue == null,
             )
+            OutlinedTextField(
+                value = state.planFeeInput,
+                onValueChange = onFeeChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                prefix = { Text("¥") },
+                label = { Text("手续费", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
         }
-
-        OutlinedTextField(
-            value = state.planFeeInput,
-            onValueChange = onFeeChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            prefix = { Text("¥") },
-            label = { Text("手续费（可留空）", style = MaterialTheme.typography.bodySmall) },
-            textStyle = MaterialTheme.typography.bodyMedium,
-        )
 
         if (state.planPerPeriodCents > 0L) {
             Text(
@@ -580,11 +587,20 @@ private fun MonthlyPanel(
         }
 
         if (state.visibleCategories.isNotEmpty()) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            Text(
+                text = "关联类别",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Wrapped rather than a horizontally scrolling row: a scroll strip shows two
+            // and a half chips, which reads as the list being broken off rather than as
+            // something to swipe.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                state.visibleCategories.take(10).forEach { category ->
+                state.visibleCategories.forEach { category ->
                     CategoryChip(
                         category = category,
                         selected = category.id == state.selectedCategoryId,

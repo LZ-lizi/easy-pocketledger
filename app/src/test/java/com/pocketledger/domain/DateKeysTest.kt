@@ -22,6 +22,38 @@ class DateKeysTest {
     }
 
     @Test
+    fun `days elapsed counts today and is the counterpart of days remaining`() {
+        assertEquals(1, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 9, 1)))
+        assertEquals(16, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 9, 16)))
+        assertEquals(30, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 9, 30)))
+        // The two overlap on today by design: 日均可用 divides by the days left *counting
+        // today*, and the recorded pace divides by the days gone *counting today*. So the
+        // sum is the month length plus one, not the month length.
+        for (day in 1..30) {
+            val on = LocalDate.of(2026, 9, day)
+            assertEquals(
+                31,
+                DateKeys.daysElapsedInMonth("2026-09", on) +
+                    DateKeys.daysRemainingInMonth("2026-09", on),
+            )
+        }
+    }
+
+    @Test
+    fun `a finished month counts as fully elapsed`() {
+        assertEquals(30, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 10, 1)))
+        assertEquals(30, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2027, 1, 1)))
+    }
+
+    @Test
+    fun `a month that has not started has nothing elapsed`() {
+        // Guards the 已记账日均 divides: zero elapsed must mean "no daily figure", not a
+        // negative or a huge one.
+        assertEquals(0, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 8, 31)))
+        assertEquals(0, DateKeys.daysElapsedInMonth("2026-09", LocalDate.of(2026, 1, 1)))
+    }
+
+    @Test
     fun `a finished month has no days remaining so the daily figure never divides by zero`() {
         assertEquals(0, DateKeys.daysRemainingInMonth("2026-09", LocalDate.of(2026, 10, 1)))
         assertEquals(0, DateKeys.daysRemainingInMonth("2026-09", LocalDate.of(2027, 1, 1)))
