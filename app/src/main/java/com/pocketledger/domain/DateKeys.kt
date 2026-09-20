@@ -62,7 +62,7 @@ object DateKeys {
     /**
      * Days of the month that have already happened, **including today**.
      *
-     * The denominator behind 「已记账日均支出」, and the counterpart to
+     * The denominator behind 「日均已用」, and the counterpart to
      * [daysRemainingInMonth]. A month that has not started has nothing recorded against
      * it, so it returns 0 rather than a negative count; a month that is over is counted
      * in full, because all of its spending is known.

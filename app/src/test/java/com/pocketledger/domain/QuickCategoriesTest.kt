@@ -139,4 +139,87 @@ class QuickCategoriesTest {
             naiveFirstTwelve,
         )
     }
+
+    // ------------------------------------------------------------ grid layout
+
+    private var nextParentId = 900L
+
+    /**
+     * A small two-level tree with each 大类's leaves numbered from 0 again.
+     *
+     * The per-group numbering is the point: it is what makes "sort by sortOrder alone"
+     * meaningless, and what `arrange` has to correct for by sorting on the parent first.
+     */
+    private fun tree(): List<CategoryEntity> {
+        val parents = listOf(
+            CategoryEntity(
+                id = nextParentId++, name = "餐饮", kind = CategoryKind.EXPENSE,
+                parentId = null, sortOrder = 0,
+            ),
+            CategoryEntity(
+                id = nextParentId++, name = "交通", kind = CategoryKind.EXPENSE,
+                parentId = null, sortOrder = 1,
+            ),
+            CategoryEntity(
+                id = nextParentId++, name = "购物", kind = CategoryKind.EXPENSE,
+                parentId = null, sortOrder = 2,
+            ),
+        )
+        val leaves = listOf(
+            leafOf(parents[0], "早餐", 0),
+            leafOf(parents[0], "午餐", 1),
+            leafOf(parents[0], "晚餐", 2),
+            leafOf(parents[1], "公共交通", 0),
+            leafOf(parents[1], "打车", 1),
+            leafOf(parents[2], "日用品", 0),
+        )
+        return parents + leaves
+    }
+
+    private fun leafOf(parent: CategoryEntity, name: String, sortOrder: Int) = CategoryEntity(
+        id = nextId++,
+        name = name,
+        kind = CategoryKind.EXPENSE,
+        parentId = parent.id,
+        sortOrder = sortOrder,
+    )
+
+    @Test
+    fun `the grid gathers each 大类 into one run of cells`() {
+        val all = tree()
+        val leaves = all.filter { it.parentId != null }
+        // The order it is *given* is a recency order, i.e. deliberately jumbled.
+        val jumbled = listOf(leaves[3], leaves[0], leaves[5], leaves[2], leaves[4], leaves[1])
+        val arranged = QuickCategories.arrange(jumbled, all).map { it.name }
+        assertEquals(
+            listOf("早餐", "午餐", "晚餐", "公共交通", "打车", "日用品"),
+            arranged,
+        )
+        // 餐饮 occupies cells 0..2 with nothing else interleaved.
+        assertEquals(listOf("餐饮", "餐饮", "餐饮"), arranged.take(3).map { name ->
+            all.first { it.name == name }.parentId?.let { id -> all.first { it.id == id }.name }.orEmpty()
+        })
+    }
+
+    @Test
+    fun `positions are fixed, so the cells do not move when the usage order changes`() {
+        val all = tree()
+        val leaves = all.filter { it.parentId != null }
+        val one = QuickCategories.arrange(leaves, all).map { it.id }
+        val other = QuickCategories.arrange(leaves.reversed(), all).map { it.id }
+        assertEquals(one, other)
+    }
+
+    @Test
+    fun `a leaf whose 大类 is gone still gets a cell, after the grouped ones`() {
+        // Dropping it would silently shrink the grid; the item is still selectable data.
+        val all = tree()
+        val orphan = CategoryEntity(
+            id = 999L, name = "孤儿", kind = CategoryKind.EXPENSE,
+            parentId = 12345L, sortOrder = 0,
+        )
+        val arranged = QuickCategories.arrange(all.filter { it.parentId != null } + orphan, all)
+        assertEquals("孤儿", arranged.last().name)
+        assertEquals(7, arranged.size)
+    }
 }

@@ -66,4 +66,30 @@ object QuickCategories {
         val (preferred, rest) = unused.partition { nameOf(it) in PREFERRED }
         return (used + preferred + rest).take(COUNT)
     }
+
+    /**
+     * Lays the chosen cells out in the category tree's own order.
+     *
+     * Membership and position are separate decisions, and [select] only answers the first.
+     * *Which* twelve appear should follow the user's habits. *Where* they appear should
+     * not: the grid used to be drawn in the same recency order that picked it, so every
+     * entry reshuffled the cells and the muscle memory of "晚餐 is the third one" was
+     * wrong by the next tap. Sorting by (大类, item) also puts every 餐饮 item on one line
+     * and every 交通 item on the next, so a row reads as a group instead of as a list of
+     * unrelated things -- which is what 「同一类型横行相邻」 asks for.
+     *
+     * `all` supplies the 大类 ordering, because a leaf only knows its parent's id. A
+     * category whose parent is missing (a leaf whose 大类 was deleted) sorts last rather
+     * than being dropped: the grid still has to show it.
+     */
+    fun arrange(items: List<CategoryEntity>, all: List<CategoryEntity>): List<CategoryEntity> {
+        val parentOrder = all.filter { it.parentId == null }.associate { it.id to it.sortOrder }
+        return items.sortedWith(
+            compareBy(
+                { it.parentId?.let(parentOrder::get) ?: Int.MAX_VALUE },
+                { it.sortOrder },
+                { it.id },
+            )
+        )
+    }
 }

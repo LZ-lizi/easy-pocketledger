@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.ui.components.ConfirmDeleteDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -455,9 +456,11 @@ private fun CategoryEditorDialog(
                 }
 
                 if (existing != null) {
-                    TextButton(onClick = { confirmDelete = true }) {
-                        Text("删除这个类别", color = LedgerTheme.colors.expense)
-                    }
+                    DestructiveOutlinedButton(
+                        label = "删除这个类别",
+                        onClick = { confirmDelete = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         },

@@ -130,6 +130,27 @@ class LedgerRepository(
     private fun writeLedgerId(): Long =
         checkNotNull(currentLedgerId.value) { "No ledger selected; onboarding must run first" }
 
+    /**
+     * The ledger a row already belongs to, for an update that must not move it.
+     *
+     * Every editor dialog rebuilds its entity from its own form state, and the form does
+     * not carry `ledgerId` -- so the submitted copy comes back carrying the field's
+     * *default* of 1. In the first ledger that is invisible; in any other it silently
+     * **moves the row into ledger 1**, and from the user's side an account or a 学期 they
+     * just edited has vanished from the ledger they were looking at. Nothing a screen can
+     * legitimately do should re-home a row, so the ledger is read back from the database
+     * and the submitted value is only used when the row is not there at all (an insert in
+     * disguise).
+     *
+     * Returns null when the row no longer exists, which callers turn into "keep what the
+     * form submitted" rather than guessing a ledger.
+     */
+    private suspend fun <T> storedLedgerId(
+        id: Long,
+        lookup: suspend (Long) -> T?,
+        ledgerIdOf: (T) -> Long,
+    ): Long? = lookup(id)?.let(ledgerIdOf)
+
     // --------------------------------------------------------------------- ledgers
 
     fun observeLedgers(): Flow<List<LedgerEntity>> = ledgerDao.observeAll()
@@ -137,6 +158,21 @@ class LedgerRepository(
     suspend fun ledgers(): List<LedgerEntity> = ledgerDao.all()
 
     suspend fun activeLedgers(): List<LedgerEntity> = ledgerDao.active()
+
+    /**
+     * Points the app at a ledger that still exists.
+     *
+     * Called after a restore, which may have removed the ledger that was selected -- every
+     * scoped query would then be watching a row that is gone and the app would look empty
+     * until it was relaunched. A still-valid selection is left alone so a restore does not
+     * move the user to a different ledger than the one they were reading.
+     */
+    suspend fun reselectLedger() {
+        val available = activeLedgers().ifEmpty { ledgers().filter { it.deletedAt == null } }
+        val current = currentLedgerId.value
+        if (current != null && available.any { it.id == current }) return
+        available.firstOrNull()?.let { selectLedger(it.id) }
+    }
 
     suspend fun ledger(id: Long): LedgerEntity? = ledgerDao.byId(id)
 
@@ -165,7 +201,7 @@ class LedgerRepository(
         val ledger = ledgerDao.active().firstOrNull() ?: return null
         val periodKey = DateKeys.monthKey(today)
         val (start, end) = DateKeys.monthRange(periodKey)
-        val totals = txnDao.observeTotals(ledger.id, start, end, null).first()
+        val totals = txnDao.observeTotals(ledger.id, start, end, listOf(-1L), 0).first()
         val allowance = allowanceDao.effectiveFor(ledger.id, periodKey)
         return WidgetSnapshot(
             ledgerName = ledger.name,
@@ -213,7 +249,11 @@ class LedgerRepository(
         accountDao.insert(account.copy(ledgerId = writeLedgerId()))
 
     suspend fun updateAccount(account: AccountEntity) {
-        accountDao.update(account.copy(updatedAt = System.currentTimeMillis()))
+        val ledgerId = storedLedgerId(account.id, accountDao::byId, AccountEntity::ledgerId)
+            ?: account.ledgerId
+        accountDao.update(
+            account.copy(ledgerId = ledgerId, updatedAt = System.currentTimeMillis())
+        )
     }
 
     /**
@@ -248,7 +288,13 @@ class LedgerRepository(
     suspend fun addCategory(category: CategoryEntity): Long =
         categoryDao.insert(category.copy(ledgerId = writeLedgerId()))
 
-    suspend fun updateCategory(category: CategoryEntity) = categoryDao.update(category)
+    suspend fun updateCategory(category: CategoryEntity) {
+        val ledgerId = storedLedgerId(category.id, categoryDao::byId, CategoryEntity::ledgerId)
+            ?: category.ledgerId
+        categoryDao.update(
+            category.copy(ledgerId = ledgerId, updatedAt = System.currentTimeMillis())
+        )
+    }
 
     /** Re-parenting is how a debatable classification gets fixed; history follows. */
     suspend fun moveCategory(id: Long, newParentId: Long?) = categoryDao.moveTo(id, newParentId)
@@ -273,43 +319,54 @@ class LedgerRepository(
 
     fun observeTotals(monthKey: String): Flow<PeriodTotals> {
         val (start, end) = DateKeys.monthRange(monthKey)
-        return scoped { txnDao.observeTotals(it, start, end, null) }
+        return scoped { txnDao.observeTotals(it, start, end, listOf(-1L), 0) }
     }
 
     /**
-     * [mainCategoryId] narrows every figure on the statistics page to one 大类; null
-     * means "everything".
+     * The statistics filter, as the DAO wants it.
+     *
+     * `null` means "no filter"; an **empty set means "match nothing"**, which is a state
+     * the filter dialog can produce by unticking everything. SQLite reads an empty `IN`
+     * list as "matches nothing" rather than as an error, so the empty set is passed
+     * through as-is and only the null case swaps in the "off" flag.
      */
+    private fun statsFilter(categoryIds: Set<Long>?): Pair<List<Long>, Int> =
+        if (categoryIds == null) listOf(-1L) to 0 else categoryIds.toList() to 1
+
     fun observeTotals(
         startDateKey: String,
         endDateKey: String,
-        mainCategoryId: Long? = null,
+        filterCategoryIds: Set<Long>? = null,
     ): Flow<PeriodTotals> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeTotals(it, start, end, mainCategoryId) }
+        val (ids, on) = statsFilter(filterCategoryIds)
+        return scoped { txnDao.observeTotals(it, start, end, ids, on) }
     }
 
     fun observeMainCategoryTotals(monthKey: String): Flow<List<MainCategoryTotal>> {
         val (start, end) = DateKeys.monthRange(monthKey)
-        return scoped { txnDao.observeMainCategoryTotals(it, start, end, null) }
+        val (ids, on) = statsFilter(null)
+        return scoped { txnDao.observeMainCategoryTotals(it, start, end, ids, on) }
     }
 
     fun observeMainCategoryTotals(
         startDateKey: String,
         endDateKey: String,
-        mainCategoryId: Long? = null,
+        filterCategoryIds: Set<Long>? = null,
     ): Flow<List<MainCategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeMainCategoryTotals(it, start, end, mainCategoryId) }
+        val (ids, on) = statsFilter(filterCategoryIds)
+        return scoped { txnDao.observeMainCategoryTotals(it, start, end, ids, on) }
     }
 
     fun observeCategoryTotals(
         startDateKey: String,
         endDateKey: String,
-        mainCategoryId: Long? = null,
+        filterCategoryIds: Set<Long>? = null,
     ): Flow<List<CategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeCategoryTotals(it, start, end, mainCategoryId) }
+        val (ids, on) = statsFilter(filterCategoryIds)
+        return scoped { txnDao.observeCategoryTotals(it, start, end, ids, on) }
     }
 
     fun observeDayTotals(monthKey: String): Flow<List<DayTotal>> {
@@ -320,10 +377,11 @@ class LedgerRepository(
     fun observeMonthTotals(
         startDateKey: String,
         endDateKey: String,
-        mainCategoryId: Long? = null,
+        filterCategoryIds: Set<Long>? = null,
     ): Flow<List<MonthTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return scoped { txnDao.observeMonthTotals(it, start, end, mainCategoryId) }
+        val (ids, on) = statsFilter(filterCategoryIds)
+        return scoped { txnDao.observeMonthTotals(it, start, end, ids, on) }
     }
 
     suspend fun transaction(id: Long): TxnEntity? = txnDao.byId(id)
@@ -389,7 +447,8 @@ class LedgerRepository(
     }
 
     suspend fun updateTransaction(txn: TxnEntity) {
-        txnDao.update(txn.copy(updatedAt = System.currentTimeMillis()))
+        val ledgerId = storedLedgerId(txn.id, txnDao::byId, TxnEntity::ledgerId) ?: txn.ledgerId
+        txnDao.update(txn.copy(ledgerId = ledgerId, updatedAt = System.currentTimeMillis()))
     }
 
     suspend fun deleteTransaction(id: Long) = txnDao.softDelete(id)
@@ -611,7 +670,7 @@ class LedgerRepository(
         endDateKey: String,
     ): Flow<PeriodTotals> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return txnDao.observeTotals(ledgerId, start, end, null)
+        return txnDao.observeTotals(ledgerId, start, end, listOf(-1L), 0)
     }
 
     fun observeMainCategoryTotalsFor(
@@ -620,7 +679,7 @@ class LedgerRepository(
         endDateKey: String,
     ): Flow<List<MainCategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return txnDao.observeMainCategoryTotals(ledgerId, start, end, null)
+        return txnDao.observeMainCategoryTotals(ledgerId, start, end, listOf(-1L), 0)
     }
 
     fun observeCategoryTotalsFor(
@@ -629,7 +688,7 @@ class LedgerRepository(
         endDateKey: String,
     ): Flow<List<CategoryTotal>> {
         val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        return txnDao.observeCategoryTotals(ledgerId, start, end, null)
+        return txnDao.observeCategoryTotals(ledgerId, start, end, listOf(-1L), 0)
     }
 
     fun observeCategoriesFor(ledgerId: Long, kind: CategoryKind): Flow<List<CategoryEntity>> =
@@ -676,7 +735,11 @@ class LedgerRepository(
     suspend fun addTerm(term: TermEntity): Long =
         termDao.insert(term.copy(ledgerId = writeLedgerId()))
 
-    suspend fun updateTerm(term: TermEntity) = termDao.update(term)
+    suspend fun updateTerm(term: TermEntity) {
+        val ledgerId = storedLedgerId(term.id, termDao::byId, TermEntity::ledgerId)
+            ?: term.ledgerId
+        termDao.update(term.copy(ledgerId = ledgerId))
+    }
 
     suspend fun deleteTerm(id: Long) = termDao.delete(id)
 
@@ -705,7 +768,11 @@ class LedgerRepository(
         installmentDao.insertPlan(plan.copy(ledgerId = writeLedgerId()))
 
     suspend fun updateInstallmentPlan(plan: InstallmentPlanEntity) {
-        installmentDao.updatePlan(plan.copy(updatedAt = System.currentTimeMillis()))
+        val ledgerId = storedLedgerId(plan.id, installmentDao::plan, InstallmentPlanEntity::ledgerId)
+            ?: plan.ledgerId
+        installmentDao.updatePlan(
+            plan.copy(ledgerId = ledgerId, updatedAt = System.currentTimeMillis())
+        )
     }
 
     suspend fun setInstallmentPlanActive(id: Long, active: Boolean) =

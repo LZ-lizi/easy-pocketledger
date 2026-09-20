@@ -368,7 +368,7 @@ private fun AllowanceCard(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "点这里填写每月生活费，首页就会显示「预算剩余」和剩余日均可用。",
+                    text = "点这里填写每月生活费，首页就会显示「预算剩余」和日均可用。",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -398,26 +398,39 @@ private fun AllowanceCard(
             )
 
             Spacer(Modifier.height(6.dp))
-            // Two daily figures, facing each other: what is left to spend per remaining
-            // day on the left, what is actually being spent per elapsed day on the
-            // right. Reading them together is the "am I on pace" check, and neither
-            // number alone answers it.
+            // Two daily figures, facing each other: what is available per remaining day on
+            // the left, what is actually being spent per elapsed day on the right. Reading
+            // them together is the "am I on pace" check, and neither number alone answers it.
+            //
+            // The remaining-day count used to be appended to the left label. It was a third
+            // number on a line that only has room for two, and the pace comparison is
+            // between the two daily figures -- how many days are left is already implied by
+            // them, since one is divided by the days remaining and the other by the days
+            // elapsed.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = secondaryLine(allowance),
+                    text = if (allowance.hasBudget) {
+                        "日均可用 ${Money.formatWithSymbol(allowance.dailyAvailableCents)}"
+                    } else {
+                        "点这里设置每月生活费，就能看到「预算剩余」和日均可用"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
+                    color = if (allowance.hasBudget && allowance.isOverBudget) {
+                        ledger.expense
+                    } else {
+                        scheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "已记账日均 ${Money.formatWithSymbol(allowance.dailySpentCents)}",
+                    text = "日均已用 ${Money.formatWithSymbol(allowance.dailySpentCents)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                     maxLines = 1,
@@ -472,13 +485,6 @@ private fun AllowanceCard(
             }
         }
     }
-}
-
-private fun secondaryLine(allowance: AllowanceSnapshot): String = when {
-    !allowance.hasBudget -> "点这里设置每月生活费，就能看到「预算剩余」和剩余日均可用"
-    allowance.isOverBudget -> "已超出 ${Money.formatWithSymbol(-allowance.remainingCents)}"
-    allowance.daysRemaining <= 0 -> "本月已结束"
-    else -> "剩余日均可用 ${Money.formatWithSymbol(allowance.dailyAvailableCents)} · 剩 ${allowance.daysRemaining} 天"
 }
 
 /**

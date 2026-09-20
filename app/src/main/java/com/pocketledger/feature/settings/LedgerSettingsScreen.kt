@@ -1,6 +1,5 @@
 package com.pocketledger.feature.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,11 +20,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.ui.components.ConfirmDeleteDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.theme.LedgerTheme
 
 /**
@@ -293,30 +291,17 @@ private fun LedgerEditorDialog(
                     // one puts the ledger away and one destroys it, and the pair only
                     // reads correctly when neither is hidden behind a menu.
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
+                        DestructiveOutlinedButton(
+                            label = if (existing.isArchived) "取消归档" else "归档",
                             onClick = { onArchive(existing) },
                             modifier = Modifier.weight(1f),
-                            border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = LedgerTheme.colors.expense,
-                            ),
-                        ) {
-                            Text(
-                                text = if (existing.isArchived) "取消归档" else "归档",
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
-                        OutlinedButton(
+                        )
+                        DestructiveOutlinedButton(
+                            label = "删除",
                             onClick = { confirmingDelete = true },
                             modifier = Modifier.weight(1f),
                             enabled = canDelete,
-                            border = BorderStroke(1.dp, LedgerTheme.colors.expense.copy(alpha = 0.6f)),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = LedgerTheme.colors.expense,
-                            ),
-                        ) {
-                            Text(text = "删除", style = MaterialTheme.typography.labelLarge)
-                        }
+                        )
                     }
                     if (!canDelete) {
                         Text(

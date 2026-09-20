@@ -40,4 +40,20 @@ interface TermDao {
 
     @Query("UPDATE term SET isActive = 0 WHERE ledgerId = :ledgerId")
     suspend fun clearActive(ledgerId: Long)
+
+    /**
+     * Terms belonging to no ledger at all.
+     *
+     * Reachable in practice: an editor can submit a rebuilt row that carries the
+     * `ledgerId` default instead of the row's real one, and an earlier ledger deletion
+     * could leave rows behind. Such a term is invisible on every screen -- the list is
+     * scoped to a ledger -- so the user's honest description of it is "my 学期 data is
+     * gone", while the row is still in the database.
+     */
+    @Query("SELECT COUNT(*) FROM term WHERE ledgerId NOT IN (SELECT id FROM ledger)")
+    suspend fun countOrphans(): Int
+
+    /** Re-homes every orphan onto [ledgerId]; see [countOrphans]. */
+    @Query("UPDATE term SET ledgerId = :ledgerId WHERE ledgerId NOT IN (SELECT id FROM ledger)")
+    suspend fun rehomeOrphans(ledgerId: Long): Int
 }

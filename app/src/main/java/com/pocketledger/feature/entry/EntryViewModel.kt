@@ -160,10 +160,15 @@ data class EntryUiState(
     val visibleCategories: List<CategoryEntity>
         get() {
             val all = orderedCategories
-            if (kind == CategoryKind.INCOME) return all
-            if (pinnedCategoryIds.isEmpty()) return QuickCategories.select(all, recentCategoryIds)
-            val pinned = all.filter { it.id in pinnedCategoryIds }
-            return pinned.ifEmpty { QuickCategories.select(all, recentCategoryIds) }
+            val chosen = when {
+                kind == CategoryKind.INCOME -> all
+                pinnedCategoryIds.isEmpty() -> QuickCategories.select(all, recentCategoryIds)
+                else -> all.filter { it.id in pinnedCategoryIds }
+                    .ifEmpty { QuickCategories.select(all, recentCategoryIds) }
+            }
+            // Chosen by habit, drawn by the tree. See [QuickCategories.arrange]: the grid
+            // keeps fixed positions and groups each 大类 onto its own line.
+            return QuickCategories.arrange(chosen, allCategories)
         }
 
     /** True when some categories are being held back behind 「更多」. */

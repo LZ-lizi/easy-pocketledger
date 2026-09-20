@@ -72,7 +72,7 @@ fun SettingsScreen(
             title = "数据",
             entries = listOf(
                 SettingsEntry("导入账单", onOpenImport),
-                SettingsEntry("导出数据", onOpenExport),
+                SettingsEntry("导出与备份", onOpenExport),
             ),
         ),
         SettingsSection(

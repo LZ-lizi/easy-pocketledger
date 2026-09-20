@@ -76,6 +76,9 @@ abstract class LedgerDatabase : RoomDatabase() {
     companion object {
         const val NAME = "ledger.db"
 
+        /** The `version` above, readable without opening the database. */
+        const val SCHEMA_VERSION = 4
+
         fun build(context: Context): LedgerDatabase =
             Room.databaseBuilder(context.applicationContext, LedgerDatabase::class.java, NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)

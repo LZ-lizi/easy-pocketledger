@@ -36,6 +36,7 @@ import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.AccountType
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.ConfirmDeleteDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 
 /** Palette offered for account accents; index-stable so a colour never moves. */
 private val ACCOUNT_COLORS = listOf(
@@ -247,12 +248,11 @@ fun AccountEditorDialog(
 
                 if (existing != null && onDelete != null) {
                     Spacer(Modifier.height(4.dp))
-                    TextButton(onClick = { confirmDelete = true }) {
-                        Text(
-                            text = "删除这个账户",
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                    DestructiveOutlinedButton(
+                        label = "删除",
+                        onClick = { confirmDelete = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         },

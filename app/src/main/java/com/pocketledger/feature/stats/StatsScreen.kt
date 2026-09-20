@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,12 +20,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +55,7 @@ fun StatsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var filterOpen by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier,
@@ -59,25 +68,24 @@ fun StatsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "header") {
-            Text(
-                text = "统计",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "统计",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                // One button instead of a chip strip: the filter is an occasional,
+                // deliberate act, and a row of thirteen 大类 chips spent a whole line of
+                // every visit on something almost never touched.
+                if (state.filterOptions.isNotEmpty()) {
+                    FilterButton(active = state.filterActive) { filterOpen = true }
+                }
+            }
         }
 
         item(key = "mode") {
             ModeChips(mode = state.mode, onSelect = viewModel::setMode)
-        }
-
-        if (state.filterOptions.isNotEmpty()) {
-            item(key = "filter") {
-                CategoryFilterRow(
-                    options = state.filterOptions,
-                    selectedId = state.filterMainCategoryId,
-                    onSelect = viewModel::setFilter,
-                )
-            }
         }
 
         when (state.mode) {
@@ -127,53 +135,123 @@ fun StatsScreen(
             }
         }
     }
-}
 
-/**
- * Narrows the whole page to one 大类.
- *
- * A leaf inherits its parent in the query, so picking 餐饮 also counts 外卖 and 早餐
- * without the user having to think about the hierarchy.
- */
-@Composable
-private fun CategoryFilterRow(
-    options: List<CategoryEntity>,
-    selectedId: Long?,
-    onSelect: (Long?) -> Unit,
-) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        FilterChip("全部", selectedId == null) { onSelect(null) }
-        options.forEach { option ->
-            FilterChip(option.name, selectedId == option.id) { onSelect(option.id) }
-        }
+    if (filterOpen) {
+        CategoryFilterDialog(
+            options = state.filterOptions,
+            selectedIds = state.filterCategoryIds,
+            onApply = viewModel::setFilter,
+            onDismiss = { filterOpen = false },
+        )
     }
 }
 
+/**
+ * The entry point to the category filter.
+ *
+ * Colour carries its state, because the button sits on a page where the filter's effect is
+ * invisible until you look at the numbers: muted while every category is counted, accent
+ * once the page has actually been narrowed. Opening the dialog shows the detail.
+ */
 @Composable
-private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun FilterButton(active: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(CircleShape)
             .background(
-                if (selected) MaterialTheme.colorScheme.primaryContainer
+                if (active) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceContainer
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
+            text = "筛选",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (active) {
+                MaterialTheme.colorScheme.onPrimary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
     }
+}
+
+/**
+ * Picks which 大类 the whole page counts.
+ *
+ * Everything starts ticked, because "show me all my spending" is the question the page is
+ * opened to answer; narrowing is the exception. Ticking a 大类 includes its items, so 餐饮
+ * counts 外卖 and 早餐 without the hierarchy being a separate decision.
+ */
+@Composable
+private fun CategoryFilterDialog(
+    options: List<CategoryEntity>,
+    selectedIds: Set<Long>,
+    onApply: (Set<Long>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by remember(options) { mutableStateOf(selectedIds) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("筛选类别") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { draft = options.map { it.id }.toSet() }) {
+                        Text("全选")
+                    }
+                    TextButton(onClick = { draft = emptySet() }) { Text("全不选") }
+                }
+                options.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                draft = if (option.id in draft) {
+                                    draft - option.id
+                                } else {
+                                    draft + option.id
+                                }
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = option.id in draft,
+                            onCheckedChange = { checked ->
+                                draft = if (checked) draft + option.id else draft - option.id
+                            },
+                        )
+                        Text(
+                            text = option.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                if (draft.isEmpty()) {
+                    Text(
+                        text = "一个类别都没选，统计会是空的。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LedgerTheme.colors.expense,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onApply(draft)
+                    onDismiss()
+                },
+            ) { Text("确定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable

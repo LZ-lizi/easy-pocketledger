@@ -46,6 +46,7 @@ import com.pocketledger.data.entity.LedgerEntity
 import com.pocketledger.data.entity.LedgerType
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.Money
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
@@ -656,9 +657,11 @@ private fun BatchCard(batch: ImportBatchView, onUndo: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onUndo) {
-                Text("撤销", color = LedgerTheme.colors.expense)
-            }
+            DestructiveOutlinedButton(
+                label = "撤销",
+                onClick = onUndo,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
     }
 }

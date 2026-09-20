@@ -95,4 +95,28 @@ class AppPreferences(private val context: Context) {
             prefs[completedRepairs] = (prefs[completedRepairs] ?: emptySet()) + id
         }
     }
+
+    // ------------------------------------------------------------------- backups
+
+    /**
+     * Every preference, as plain strings, for the backup file.
+     *
+     * Read out generically rather than key by key so a preference added later is carried
+     * by existing backups instead of being quietly left behind -- the pinned-category set
+     * is keyed per ledger, and forgetting it would restore a ledger that looks right but
+     * opens with the wrong twelve categories on the keypad.
+     */
+    suspend fun snapshot(): Map<String, Set<String>> =
+        context.settingsStore.data.first().asMap().mapNotNull { (key, value) ->
+            val strings = (value as? Set<*>)?.mapNotNull { it as? String } ?: return@mapNotNull null
+            key.name to strings.toSet()
+        }.toMap()
+
+    /** Replaces every preference. Absent keys are cleared, matching a full restore. */
+    suspend fun replaceAll(values: Map<String, Set<String>>) {
+        context.settingsStore.edit { prefs ->
+            prefs.clear()
+            values.forEach { (name, set) -> prefs[stringSetPreferencesKey(name)] = set }
+        }
+    }
 }

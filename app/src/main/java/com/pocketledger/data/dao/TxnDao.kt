@@ -149,8 +149,11 @@ interface TxnDao {
      * A transfer's fee is a real cost, so it counts as expense; the transferred
      * principal itself is neither income nor expense.
      *
-     * [mainCategoryId] filters to one 大类: a leaf matches through `c.parentId` and a
-     * top-level row through `c.id`, so one parameter covers both.
+     * [filterIds] narrows the period to a set of 大类: a leaf matches through `c.parentId`
+     * and a top-level row through `c.id`, so one list covers both levels. [filterOn] is 0
+     * for "no filter", because SQLite's `IN ()` means "matches nothing" rather than
+     * "matches everything", so an empty selection cannot express "off" -- and `-1` is
+     * bound in that case, which no row can match.
      */
     @Query(
         """
@@ -164,16 +167,17 @@ interface TxnDao {
         LEFT JOIN category c ON c.id = t.categoryId
         WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL AND t.isExcludedFromStats = 0
           AND t.localDateKey BETWEEN :startKey AND :endKey
-          AND (:mainCategoryId IS NULL
-               OR c.id = :mainCategoryId
-               OR c.parentId = :mainCategoryId)
+          AND (:filterOn = 0
+               OR c.id IN (:filterIds)
+               OR c.parentId IN (:filterIds))
         """
     )
     fun observeTotals(
         ledgerId: Long,
         startKey: String,
         endKey: String,
-        mainCategoryId: Long?,
+        filterIds: List<Long>,
+        filterOn: Int,
     ): Flow<PeriodTotals>
 
     /**
@@ -192,9 +196,9 @@ interface TxnDao {
           AND t.type = 'EXPENSE'
           AND t.isExcludedFromStats = 0
           AND t.localDateKey BETWEEN :startKey AND :endKey
-          AND (:mainCategoryId IS NULL
-               OR c.id = :mainCategoryId
-               OR c.parentId = :mainCategoryId)
+          AND (:filterOn = 0
+               OR c.id IN (:filterIds)
+               OR c.parentId IN (:filterIds))
         GROUP BY COALESCE(c.parentId, c.id)
         """
     )
@@ -202,7 +206,8 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
-        mainCategoryId: Long?,
+        filterIds: List<Long>,
+        filterOn: Int,
     ): Flow<List<MainCategoryTotal>>
 
     @Query(
@@ -216,9 +221,9 @@ interface TxnDao {
           AND t.isExcludedFromStats = 0
           AND t.categoryId IS NOT NULL
           AND t.localDateKey BETWEEN :startKey AND :endKey
-          AND (:mainCategoryId IS NULL
-               OR c.id = :mainCategoryId
-               OR c.parentId = :mainCategoryId)
+          AND (:filterOn = 0
+               OR c.id IN (:filterIds)
+               OR c.parentId IN (:filterIds))
         GROUP BY t.categoryId
         ORDER BY totalCents DESC
         """
@@ -227,7 +232,8 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
-        mainCategoryId: Long?,
+        filterIds: List<Long>,
+        filterOn: Int,
     ): Flow<List<CategoryTotal>>
 
     /** Per-day net for the calendar view; a month of rows, never the whole table. */
@@ -253,9 +259,9 @@ interface TxnDao {
         LEFT JOIN category c ON c.id = t.categoryId
         WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL AND t.isExcludedFromStats = 0
           AND t.localDateKey BETWEEN :startKey AND :endKey
-          AND (:mainCategoryId IS NULL
-               OR c.id = :mainCategoryId
-               OR c.parentId = :mainCategoryId)
+          AND (:filterOn = 0
+               OR c.id IN (:filterIds)
+               OR c.parentId IN (:filterIds))
         GROUP BY monthKey
         ORDER BY monthKey ASC
         """
@@ -264,7 +270,8 @@ interface TxnDao {
         ledgerId: Long,
         startKey: String,
         endKey: String,
-        mainCategoryId: Long?,
+        filterIds: List<Long>,
+        filterOn: Int,
     ): Flow<List<MonthTotal>>
 
     @Query("SELECT * FROM txn WHERE id = :id")

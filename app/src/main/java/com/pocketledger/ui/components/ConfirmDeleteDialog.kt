@@ -52,12 +52,7 @@ fun ConfirmDeleteDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = enabled,
-                onClick = onConfirm,
-            ) {
-                Text(confirmLabel, color = LedgerTheme.colors.expense)
-            }
+            DestructiveOutlinedButton(label = confirmLabel, onClick = onConfirm, enabled = enabled)
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }

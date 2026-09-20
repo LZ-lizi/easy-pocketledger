@@ -53,6 +53,7 @@ import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.InstallmentSchedule
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
@@ -436,14 +437,11 @@ private fun InstallmentEditorDialog(
                 }
 
                 if (existing != null) {
-                    TextButton(
+                    DestructiveOutlinedButton(
+                        label = if (existing.isActive) "终止此计划" else "恢复此计划",
                         onClick = { onSetActive(existing, !existing.isActive) },
-                    ) {
-                        Text(
-                            text = if (existing.isActive) "终止这个计划" else "恢复这个计划",
-                            color = LedgerTheme.colors.expense,
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text(
                         text = "终止只影响之后的扣款，已经记下的账目不动。",
                         style = MaterialTheme.typography.labelSmall,

@@ -5,6 +5,7 @@ import com.pocketledger.data.BudgetAlertChecker
 import com.pocketledger.data.DataRepair
 import com.pocketledger.data.InstallmentRunner
 import com.pocketledger.data.LedgerDatabase
+import com.pocketledger.data.backup.BackupService
 import com.pocketledger.data.prefs.AppPreferences
 import com.pocketledger.notify.BudgetNotifier
 import com.pocketledger.widget.refreshLedgerWidgets
@@ -31,6 +32,16 @@ import kotlinx.coroutines.launch
 class AppContainer(context: Context) {
 
     private val appContext: Context = context.applicationContext
+
+    /** Schema version the database is built at; a backup must match it to be restorable. */
+    val schemaVersion: Int = LedgerDatabase.SCHEMA_VERSION
+
+    /** Installed version name, recorded in a backup so a file can be traced to a build. */
+    val appVersion: String by lazy {
+        runCatching {
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
 
     /**
      * Application-scoped and never cancelled: the only work started here is
@@ -79,10 +90,33 @@ class AppContainer(context: Context) {
     /** App-level settings (pinned categories, fired budget alerts). */
     val appPreferences: AppPreferences get() = preferences
 
+    /** Whole-application backup and restore; see [BackupService]. */
+    val backupService: BackupService by lazy { BackupService(database, preferences) }
+
+    /**
+     * Puts the app back in a consistent state after a restore replaced everything.
+     *
+     * The selection is re-pointed first, because the ledger it named may not exist any
+     * more -- and if it does not, every scoped query in the app is watching a ledger that
+     * is gone and the whole UI reads as empty until the next launch.
+     */
+    suspend fun afterRestore() {
+        repository.reselectLedger()
+        runCatching { installmentRunner.run() }
+        refreshWidgets()
+    }
+
     private val budgetNotifier: BudgetNotifier by lazy { BudgetNotifier(appContext) }
 
     /** One-off data fix-ups that a schema migration cannot express. */
-    private val dataRepair: DataRepair by lazy { DataRepair(database.accountDao(), preferences) }
+    private val dataRepair: DataRepair by lazy {
+        DataRepair(
+            accountDao = database.accountDao(),
+            termDao = database.termDao(),
+            ledgerDao = database.ledgerDao(),
+            preferences = preferences,
+        )
+    }
 
     private val budgetAlertChecker: BudgetAlertChecker by lazy {
         BudgetAlertChecker(repository, preferences, budgetNotifier)

@@ -17,8 +17,8 @@ android {
         applicationId = "com.pocketledger"
         minSdk = 31
         targetSdk = 37
-        versionCode = 10
-        versionName = "0.8.2"
+        versionCode = 11
+        versionName = "0.8.3"
     }
 
     buildTypes {

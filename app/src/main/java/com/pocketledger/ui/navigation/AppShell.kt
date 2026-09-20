@@ -174,17 +174,22 @@ private fun tabIndexOf(route: String?): Int {
  * back the other way has to come in from the left. The transitions used to hardcode a
  * right-hand offset, so moving left still slid right-to-left and the motion contradicted
  * the tap.
+ *
+ * Going *into* a sub-page always travels forward, whichever sub-page it was opened from.
+ * Comparing dock indices alone could not express that: two sub-pages of the same tab both
+ * map to that tab, so 设置 → 关于 → 功能介绍 compared equal and slid in from the *left* --
+ * the one direction a deeper screen must never come from. Depth is what decides inside a
+ * tab, and dock position is what decides between tabs.
  */
 private fun isForward(from: String?, to: String?): Boolean {
-    val a = tabIndexOf(from)
-    val b = tabIndexOf(to)
+    val toIsTab = TABS.any { it.route == to }
+    val fromIsTab = TABS.any { it.route == from }
     return when {
-        a >= 0 && b >= 0 -> b > a
-        // Deeper into a tab, or a full-window page opened from one, travels forward.
-        a >= 0 -> true
-        // Back up to a tab travels backward.
-        b >= 0 -> false
-        else -> true
+        // Any sub-page or full-window page: always in from the right.
+        !toIsTab -> true
+        // Climbing back out to a tab: from the left, i.e. the reverse of going in.
+        !fromIsTab -> false
+        else -> tabIndexOf(to) > tabIndexOf(from)
     }
 }
 

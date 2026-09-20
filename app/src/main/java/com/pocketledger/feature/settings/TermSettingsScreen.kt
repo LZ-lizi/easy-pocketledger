@@ -40,6 +40,7 @@ import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.domain.DateKeys
 import com.pocketledger.ui.components.CalendarPickerDialog
 import com.pocketledger.ui.components.ConfirmDeleteDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -245,9 +246,11 @@ private fun TermEditorDialog(
                 QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
 
                 if (existing != null) {
-                    TextButton(onClick = { confirmDelete = true }) {
-                        Text("删除这个学期", color = LedgerTheme.colors.expense)
-                    }
+                    DestructiveOutlinedButton(
+                        label = "删除这个学期",
+                        onClick = { confirmDelete = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         },

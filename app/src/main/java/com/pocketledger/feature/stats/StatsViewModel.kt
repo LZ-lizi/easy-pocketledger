@@ -74,9 +74,20 @@ data class StatsUiState(
     val pieLevel: PieLevel = PieLevel.SMALL,
     /** Top-level categories offered as a filter. */
     val filterOptions: List<CategoryEntity> = emptyList(),
-    val filterMainCategoryId: Long? = null,
+    /** 大类 the page is narrowed to. Empty means every category. */
+    val filterCategoryIds: Set<Long> = emptySet(),
 ) {
     val hasExpense: Boolean get() = totals.expenseCents > 0L
+
+    /**
+     * True when the category filter is doing something.
+     *
+     * The button that opens the filter is tinted from this: at its default (everything
+     * selected) it is not a filter at all, and drawing it in the accent colour would claim
+     * the page is narrowed when it is not.
+     */
+    val filterActive: Boolean
+        get() = filterOptions.isNotEmpty() && filterCategoryIds.size != filterOptions.size
 
     /** True when 学期 is selected but no term has been defined yet. */
     val needsTermSetup: Boolean
@@ -89,7 +100,12 @@ internal data class StatsSelection(
     val termId: Long?,
     val terms: List<TermEntity>,
     val pieLevel: PieLevel,
-    val filterMainCategoryId: Long?,
+    /**
+     * The category filter as the query needs it: `null` for "no filter", a set (possibly
+     * empty) for an actual narrowing. The resolved "everything selected" case collapses
+     * back to null here so the common visit runs the cheapest query.
+     */
+    val filterCategoryIds: Set<Long>?,
 )
 
 /** The user-controlled inputs, folded together before being paired with the term list. */
@@ -98,7 +114,8 @@ private data class SelectionKey(
     val monthKey: String,
     val termId: Long?,
     val pieLevel: PieLevel,
-    val filterMainCategoryId: Long?,
+    /** Null while the user has never opened the filter; see [StatsViewModel]. */
+    val filterCategoryIds: Set<Long>?,
 )
 
 private const val TREND_MONTHS = 6
@@ -119,23 +136,39 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
     private val monthKey = MutableStateFlow(DateKeys.monthKey(LocalDate.now()))
     private val selectedTermId = MutableStateFlow<Long?>(null)
     private val pieLevel = MutableStateFlow(PieLevel.SMALL)
-    private val filterMainCategoryId = MutableStateFlow<Long?>(null)
+
+    /**
+     * Null means "not customised yet", which resolves to *every* 大类 once the category
+     * list is known.
+     *
+     * Defaulting to the full set rather than to an empty selection matters: an empty set
+     * is a legitimate state here ("nothing selected", which is what you get by unticking
+     * everything) and it must not silently mean "no filter" too.
+     */
+    private val filterCategoryIds = MutableStateFlow<Set<Long>?>(null)
 
     // Five selection inputs plus the term list would exceed combine's typed overloads,
     // so the selection is folded together first and then paired with the terms.
     val uiState: StateFlow<StatsUiState> = combine(
-        combine(mode, monthKey, selectedTermId, pieLevel, filterMainCategoryId) { m, k, t, pie, filter ->
+        combine(mode, monthKey, selectedTermId, pieLevel, filterCategoryIds) { m, k, t, pie, filter ->
             SelectionKey(m, k, t, pie, filter)
         },
         repository.observeTerms(),
-    ) { key, terms ->
+        repository.observeCategories(CategoryKind.EXPENSE),
+    ) { key, terms, categories ->
+        val allMain = categories.filter { it.parentId == null }.map { it.id }.toSet()
+        // A saved selection that names rows this ledger no longer has (or a first load
+        // where nothing is known yet) counts as "not customised".
+        val chosen = key.filterCategoryIds?.takeIf { it.all(allMain::contains) }
         StatsSelection(
             mode = key.mode,
             monthKey = key.monthKey,
             termId = key.termId,
             terms = terms,
             pieLevel = key.pieLevel,
-            filterMainCategoryId = key.filterMainCategoryId,
+            // Selecting every 大类 is the default, and passing it to SQL would filter for
+            // no reason; selecting *none* is a real narrowing and must be kept as one.
+            filterCategoryIds = chosen?.takeIf { allMain.isNotEmpty() && it.size != allMain.size },
         )
     }.flatMapLatest { selection ->
         val today = LocalDate.now()
@@ -145,12 +178,13 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
             .minusMonths((TREND_MONTHS - 1).toLong())
             .atDay(1)
             .toString()
+        val activeFilter = selection.filterCategoryIds
 
         combine(
-            repository.observeTotals(startKey, endKey, selection.filterMainCategoryId),
-            repository.observeCategoryTotals(startKey, endKey, selection.filterMainCategoryId),
-            repository.observeMainCategoryTotals(startKey, endKey, selection.filterMainCategoryId),
-            repository.observeMonthTotals(trendStart, endKey, selection.filterMainCategoryId),
+            repository.observeTotals(startKey, endKey, activeFilter),
+            repository.observeCategoryTotals(startKey, endKey, activeFilter),
+            repository.observeMainCategoryTotals(startKey, endKey, activeFilter),
+            repository.observeMonthTotals(trendStart, endKey, activeFilter),
             repository.observeCategories(CategoryKind.EXPENSE),
         ) { totals, categoryTotals, mainTotals, months, categories ->
             // The 大类 view reuses the leaf ranking machinery by projecting the
@@ -161,6 +195,7 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
                 categoryTotals
             }
             val ranking = buildRanking(source, categories, totals.expenseCents, RANKING_SIZE)
+            val options = categories.filter { it.parentId == null }.sortedBy { it.sortOrder }
             StatsUiState(
                 mode = selection.mode,
                 monthKey = selection.monthKey,
@@ -174,8 +209,10 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
                 donutSlices = collapseTail(ranking, totals.expenseCents),
                 months = months,
                 pieLevel = selection.pieLevel,
-                filterOptions = categories.filter { it.parentId == null }.sortedBy { it.sortOrder },
-                filterMainCategoryId = selection.filterMainCategoryId,
+                filterOptions = options,
+                // The dialog always shows a concrete set of tick boxes; "no filter" is
+                // drawn as everything being ticked.
+                filterCategoryIds = selection.filterCategoryIds ?: options.map { it.id }.toSet(),
             )
         }
     }.stateIn(
@@ -197,9 +234,10 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
         pieLevel.value = level
     }
 
-    /** [mainCategoryId] null clears the filter. */
-    fun setFilter(mainCategoryId: Long?) {
-        filterMainCategoryId.value = mainCategoryId
+    /** Ticking every box means "no filter" again, so [StatsUiState.filterActive] clears. */
+    fun setFilter(categoryIds: Set<Long>) {
+        val known = uiState.value.filterOptions.map { it.id }.toSet()
+        filterCategoryIds.value = categoryIds.intersect(known)
     }
 
     fun previousMonth() {

@@ -527,6 +527,8 @@ private fun MonthlyPanel(
     onSelectAccount: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var moreOpen by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -607,6 +609,26 @@ private fun MonthlyPanel(
                         onClick = { onSelectCategory(category.id) },
                     )
                 }
+                // The twelve quick categories are what the grid shows, not what a monthly
+                // plan is limited to: rent, tuition and insurance are recurring precisely
+                // because they are not everyday spending, so they are exactly the ones the
+                // quick set leaves out. The full tree is one tap away, same dialog as the
+                // expense grid's 「更多」.
+                if (state.categoryGroups.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clickable { moreOpen = true }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            text = "更多",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
 
@@ -622,6 +644,15 @@ private fun MonthlyPanel(
                 }
             }
         }
+    }
+
+    if (moreOpen) {
+        CategoryMoreDialog(
+            groups = state.categoryGroups,
+            selectedId = state.selectedCategoryId,
+            onSelect = onSelectCategory,
+            onDismiss = { moreOpen = false },
+        )
     }
 }
 
