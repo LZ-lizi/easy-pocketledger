@@ -46,3 +46,7 @@ Thumbs.db
 /icons/drawn/
 __pycache__/
 *.pyc
+
+# Scratch renders from the copy extractor
+/tools/_*
+
