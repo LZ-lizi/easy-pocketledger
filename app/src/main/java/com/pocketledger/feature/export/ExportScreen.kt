@@ -2,6 +2,7 @@ package com.pocketledger.feature.export
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,15 +13,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,10 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pocketledger.data.backup.BackupScope
 import com.pocketledger.domain.AppBackup
+import com.pocketledger.ui.components.LedgerIcon
+import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.util.DateLabels
 import java.time.Instant
@@ -42,6 +51,16 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * The backup's MIME type.
+ *
+ * A vendor type rather than `application/json`: the file is not JSON to any other app --
+ * it is this app's backup, and giving it a type of its own means the system will not offer
+ * it to a text editor or a JSON viewer, and will not append a `.json` extension over the
+ * name this screen chose.
+ */
+private const val BACKUP_MIME = "application/vnd.pocketledger.backup"
 
 /**
  * Exports the current ledger to CSV, and the whole app to a backup file.
@@ -79,7 +98,7 @@ fun ExportScreen(
     }
 
     val createBackupDocument = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
+        contract = ActivityResultContracts.CreateDocument(BACKUP_MIME),
     ) { uri ->
         val pending = state.pendingBackup
         if (uri == null || pending == null) {
@@ -94,8 +113,8 @@ fun ExportScreen(
         viewModel.onBackupWriteFinished(written)
     }
 
-    // `*/*` rather than application/json: a backup that has been through a chat app, a
-    // cloud drive or an SD card comes back with whatever type that app guessed, and a
+    // `*/*` rather than the backup's own type: a file that has been through a chat app, a
+    // cloud drive or an SD card comes back with whatever type *that* app guessed, and a
     // filter here would hide the very file the user is trying to restore.
     val openBackupDocument = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -161,7 +180,16 @@ fun ExportScreen(
         item(key = "csv-title") {
             SectionTitle(
                 title = "导出账单",
-                detail = "导出当前账本（${state.ledgerName.ifBlank { "账本" }}）为 CSV 文件，可用表格软件打开。",
+                detail = "导出所选账本为 CSV 文件，可用表格软件打开；" +
+                    "选「全部账本」时会多一列「账本」。",
+            )
+        }
+
+        item(key = "csv-target") {
+            TargetField(
+                label = state.targetLabel,
+                enabled = state.pending == null,
+                onClick = viewModel::openTargetPicker,
             )
         }
 
@@ -170,7 +198,7 @@ fun ExportScreen(
             // below -- "I have nothing to export" is not "I have nothing to back up".
             item(key = "empty") {
                 Text(
-                    text = "这个账本还没有记录可导出。",
+                    text = "这个选择下还没有记录可导出。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -208,58 +236,15 @@ fun ExportScreen(
         item(key = "backup-title") {
             SectionTitle(
                 title = "应用备份",
-                detail = "把记账、账本、账户、余额、类别和设置完整存成一个文件。" +
-                    "恢复时用这个文件覆盖当前全部数据。",
-            )
-        }
-
-        item(key = "backup-scope") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BackupScope.entries.forEach { candidate ->
-                    val selected = candidate == state.backupScope
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(
-                                if (selected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainer
-                                }
-                            )
-                            .clickable { viewModel.setBackupScope(candidate) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    ) {
-                        Text(
-                            text = candidate.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        item(key = "backup-scope-detail") {
-            Text(
-                text = if (state.backupScope == BackupScope.ALL) {
-                    "${BackupScope.ALL.detail}（共 ${state.ledgerCount} 个账本）"
-                } else {
-                    BackupScope.LEDGER.detail
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                detail = "把记账、账本、账户、余额、类别和设置「全部」存成一个文件。" +
+                    "备份不可选范围，恢复时用这个文件覆盖当前全部数据。",
             )
         }
 
         item(key = "backup-export") {
             ActionCard(
                 title = "导出备份文件",
-                detail = "保存为 .json 文件，可以拷到别的设备或云盘",
+                detail = "保存为 .${AppBackup.EXTENSION} 文件，可以拷到别的设备或云盘",
                 enabled = state.pendingBackup == null && !state.restoring,
                 onClick = viewModel::prepareBackup,
             )
@@ -312,6 +297,127 @@ fun ExportScreen(
             onDismiss = viewModel::dismissRestore,
         )
     }
+
+    if (state.targetPickerVisible) {
+        TargetPickerDialog(
+            ledgers = state.ledgers,
+            selected = state.target,
+            onAll = viewModel::chooseAllLedgers,
+            onOne = viewModel::chooseLedger,
+            onDismiss = viewModel::dismissTargetPicker,
+        )
+    }
+}
+
+/**
+ * Which ledger the CSV covers.
+ *
+ * A field that opens a list rather than a row of chips: two ledgers fit in chips, ten do
+ * not, and the chosen one has to stay readable at any number. Same shape as the ledger
+ * picker on the import screen, because it answers the same question.
+ */
+@Composable
+private fun TargetField(label: String, enabled: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Start,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            text = "▾",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TargetPickerDialog(
+    ledgers: List<LedgerChoice>,
+    selected: CsvTarget,
+    onAll: () -> Unit,
+    onOne: (LedgerChoice) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导出哪个账本") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                PickerRow(
+                    label = "全部账本",
+                    detail = "每个账本各占一列「账本」区分",
+                    selected = selected is CsvTarget.AllLedgers,
+                    onClick = onAll,
+                )
+                ledgers.forEach { choice ->
+                    PickerRow(
+                        label = choice.name,
+                        detail = null,
+                        selected = selected is CsvTarget.One && selected.ledgerId == choice.id,
+                        onClick = { onOne(choice) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+@Composable
+private fun PickerRow(
+    label: String,
+    detail: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            detail?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (selected) {
+            LedgerIconView(
+                icon = LedgerIcon.CHEVRON_RIGHT,
+                tint = MaterialTheme.colorScheme.primary,
+                size = 18.dp,
+            )
+        }
+    }
 }
 
 /**
@@ -334,12 +440,8 @@ private fun RestoreConfirmDialog(
         text = {
             Column {
                 Text(
-                    text = buildString {
-                        append("将用这个备份覆盖当前全部数据：")
-                        append("${file.tables.size} 张表、${file.rowCount} 条记录")
-                        file.ledgerName?.let { append("（$it）") }
-                        append("。")
-                    },
+                    text = "将用这个备份覆盖当前全部数据：" +
+                        "${file.tables.size} 张表、${file.rowCount} 条记录。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -350,14 +452,6 @@ private fun RestoreConfirmDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (file.omittedTables.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "这个备份里没有：${file.omittedTables.joinToString()}。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = "当前的数据会被替换掉，且无法撤销。建议先导出一份现在的备份。",

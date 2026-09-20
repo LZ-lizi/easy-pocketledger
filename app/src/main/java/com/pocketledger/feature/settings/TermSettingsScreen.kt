@@ -206,11 +206,14 @@ private fun TermEditorDialog(
     onDelete: (TermEntity) -> Unit,
 ) {
     val today = remember { LocalDate.now() }
+    // Defaults describe the term the user is in, not the day they opened the editor:
+    // 9月1日 or 3月1日, whichever passed most recently. See [TermSettingsViewModel.defaultStart].
+    val defaultStart = remember { TermSettingsViewModel.defaultStartDate(today) }
     var name by remember { mutableStateOf(existing?.name ?: suggestedName) }
-    var startKey by remember { mutableStateOf(existing?.startDateKey ?: today.toString()) }
+    var startKey by remember { mutableStateOf(existing?.startDateKey ?: defaultStart) }
     var endKey by remember {
         mutableStateOf(
-            existing?.endDateKey ?: TermSettingsViewModel.defaultEndDate(today)
+            existing?.endDateKey ?: TermSettingsViewModel.defaultEndDate(defaultStart)
         )
     }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -253,7 +256,9 @@ private fun TermEditorDialog(
                         isError = !rangeValid,
                         errorText = if (!rangeValid) "结束日期不能早于开始日期" else null,
                     )
-                    QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
+                    QuickChip("一学期后") {
+                        endKey = TermSettingsViewModel.defaultEndDate(startKey)
+                    }
 
                 }
                 if (existing != null) {

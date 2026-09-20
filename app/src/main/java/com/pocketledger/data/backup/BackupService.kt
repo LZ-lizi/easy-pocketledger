@@ -11,12 +11,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
-/** What a backup covers. */
-enum class BackupScope(val label: String, val detail: String) {
-    LEDGER("当前账本", "只备份这一个账本的内容"),
-    ALL("全部账本", "备份全部账本和全部设置"),
-}
-
 /**
  * Dumps and restores the whole application.
  *
@@ -26,81 +20,37 @@ enum class BackupScope(val label: String, val detail: String) {
  * updated when a table or column is added, which is exactly when a backup is most likely
  * to be written wrongly.
  *
- * A restore is a **full replacement**: everything currently stored is deleted first. The
- * file says "here is the whole app"; merging it with what is already there would produce a
- * third state that is neither the backup nor the present, and there would be no way to
- * describe what the user ended up with.
+ * **There is no scope.** Every table, every ledger, every soft-deleted row: a backup that
+ * covered only part of the app would restore into a state the user never had, and the
+ * question "which ledger?" belongs to the CSV export, which is a spreadsheet of one book
+ * rather than a copy of the application.
+ *
+ * A restore is likewise a **full replacement**: everything currently stored is deleted
+ * first. Merging the file with what is already there would produce a third state that is
+ * neither the backup nor the present, and there would be no way to describe what the user
+ * ended up with.
  */
 class BackupService(
     private val database: LedgerDatabase,
     private val preferences: AppPreferences,
 ) {
 
-    /**
-     * Links a table that has no `ledgerId` of its own to the ledger through its parent.
-     *
-     * Only two tables look like this -- a tag link and an instalment period, both of which
-     * are keyed purely by a foreign key. They are named explicitly rather than guessed at,
-     * and anything else without a `ledgerId` is refused instead of being exported whole:
-     * silently attaching another ledger's rows to this one would put someone else's
-     * numbers in the file.
-     */
-    private data class ChildLink(val column: String, val parentTable: String)
-
-    private val childLinks = mapOf(
-        "txn_tag" to ChildLink("txnId", "txn"),
-        "installment_period" to ChildLink("planId", "installment_plan"),
-    )
-
     suspend fun export(
-        scope: BackupScope,
-        ledgerId: Long?,
-        ledgerName: String?,
         schemaVersion: Int,
         appVersion: String,
         now: Long = System.currentTimeMillis(),
     ): AppBackup.File {
         val db = database.openHelper.readableDatabase
-        val restrictToLedger = scope == BackupScope.LEDGER && ledgerId != null
         val tables = linkedMapOf<String, AppBackup.Table>()
-        val omitted = mutableListOf<String>()
-
         tableNames(db).forEach { table ->
-            val columns = columnsOf(db, table)
-            when {
-                !restrictToLedger -> tables[table] = dump(db, table, where = null, args = emptyList())
-
-                table == LEDGER_TABLE ->
-                    tables[table] = dump(db, table, "id = ?", listOf(ledgerId))
-
-                "ledgerId" in columns ->
-                    tables[table] = dump(db, table, "ledgerId = ?", listOf(ledgerId))
-
-                else -> {
-                    val link = childLinks[table]
-                    if (link == null) {
-                        omitted += table
-                    } else {
-                        tables[table] = dump(
-                            db,
-                            table,
-                            "${link.column} IN (SELECT id FROM ${link.parentTable} WHERE ledgerId = ?)",
-                            listOf(ledgerId),
-                        )
-                    }
-                }
-            }
+            tables[table] = dump(db, table)
         }
-
         return AppBackup.File(
             version = AppBackup.VERSION,
             schemaVersion = schemaVersion,
             createdAt = now,
             appVersion = appVersion,
-            scope = scope.name,
-            ledgerName = if (scope == BackupScope.LEDGER) ledgerName else null,
             tables = tables,
-            omittedTables = omitted,
             preferences = preferences.snapshot(),
         )
     }
@@ -169,20 +119,8 @@ class BackupService(
         }
     }
 
-    private fun columnsOf(db: SupportSQLiteDatabase, table: String): List<String> =
-        db.query("SELECT * FROM `$table` LIMIT 0").use { it.columnNames.toList() }
-
-    private fun dump(
-        db: SupportSQLiteDatabase,
-        table: String,
-        where: String?,
-        args: List<Any?>,
-    ): AppBackup.Table {
-        val sql = buildString {
-            append("SELECT * FROM `").append(table).append('`')
-            if (where != null) append(" WHERE ").append(where)
-        }
-        return db.query(sql, args.toTypedArray()).use { cursor ->
+    private fun dump(db: SupportSQLiteDatabase, table: String): AppBackup.Table =
+        db.query("SELECT * FROM `$table`").use { cursor ->
             val columns = cursor.columnNames.toList()
             val rows = ArrayList<List<JsonElement>>(cursor.count)
             while (cursor.moveToNext()) {
@@ -190,7 +128,6 @@ class BackupService(
             }
             AppBackup.Table(columns, rows)
         }
-    }
 
     /**
      * One cell, keeping its storage class.
@@ -241,9 +178,5 @@ class BackupService(
             statement.bindDouble(index, primitive.content.toDouble())
         }
     }
-
-    private companion object {
-        /** The table that *is* a ledger, so a scoped export filters on its own id. */
-        const val LEDGER_TABLE = "ledger"
-    }
 }
+

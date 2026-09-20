@@ -21,18 +21,13 @@ class AppBackupTest {
 
     private fun file(
         tables: Map<String, AppBackup.Table>,
-        omitted: List<String> = emptyList(),
         preferences: Map<String, Set<String>> = emptyMap(),
-        ledgerName: String? = "我的账本",
     ) = AppBackup.File(
         version = AppBackup.VERSION,
         schemaVersion = 4,
         createdAt = 1_700_000_000_000L,
         appVersion = "0.8.3",
-        scope = "ALL",
-        ledgerName = ledgerName,
         tables = tables,
-        omittedTables = omitted,
         preferences = preferences,
     )
 
@@ -55,14 +50,12 @@ class AppBackupTest {
 
     @Test
     fun `a round trip preserves every table, column and value`() {
-        val original = file(tables, omitted = listOf("txn_tag"), preferences = mapOf("a" to setOf("1", "2")))
+        val original = file(tables, preferences = mapOf("a" to setOf("1", "2")))
         val decoded = AppBackup.decode(AppBackup.encode(original))
 
         assertEquals(original.schemaVersion, decoded.schemaVersion)
         assertEquals(original.createdAt, decoded.createdAt)
         assertEquals(original.appVersion, decoded.appVersion)
-        assertEquals(original.ledgerName, decoded.ledgerName)
-        assertEquals(original.omittedTables, decoded.omittedTables)
         assertEquals(original.preferences, decoded.preferences)
         assertEquals(tables.keys, decoded.tables.keys)
         decoded.tables.forEach { (name, table) ->
@@ -150,6 +143,38 @@ class AppBackupTest {
     @Test
     fun `rowCount adds up the tables`() {
         assertEquals(3, file(tables).rowCount)
+    }
+
+    @Test
+    fun `the backup has a file extension of its own`() {
+        // Not `.json`: a backup is not a file to open in an editor, and one named `….json`
+        // is the file another app will offer to open and then rewrite.
+        assertEquals("plbk", AppBackup.EXTENSION)
+        assertEquals("记账本-备份-20260920.plbk", AppBackup.fileName("记账本", "2026-09-20"))
+    }
+
+    @Test
+    fun `a file written before the scope was dropped still reads`() {
+        // v1 files carried scope/ledgerName/omittedTables. Decoding ignores keys it does
+        // not know, which is what makes an older backup restorable after the format
+        // dropped those fields.
+        val legacy = """
+            {
+              "format": "pocketledger-backup",
+              "version": 1,
+              "schemaVersion": 4,
+              "createdAt": 1700000000000,
+              "appVersion": "0.8.3",
+              "scope": "LEDGER",
+              "ledgerName": "我的账本",
+              "omittedTables": ["txn_tag"],
+              "tables": { "ledger": { "columns": ["id"], "rows": [[1]] } },
+              "preferences": { "k": ["v"] }
+            }
+        """.trimIndent()
+        val decoded = AppBackup.decode(legacy)
+        assertEquals(1, decoded.tables.getValue("ledger").rows.size)
+        assertEquals(mapOf("k" to setOf("v")), decoded.preferences)
     }
 
     private fun assertRefused(text: String) {

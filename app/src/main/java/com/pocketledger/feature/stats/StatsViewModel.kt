@@ -7,7 +7,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
 import com.pocketledger.data.dao.CategoryTotal
-import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
@@ -70,7 +69,6 @@ data class StatsUiState(
     val topCategories: List<CategoryRank> = emptyList(),
     /** Top wedges plus an aggregated 「其他」; what the donut draws. */
     val donutSlices: List<CategoryRank> = emptyList(),
-    val months: List<MonthTotal> = emptyList(),
     val pieLevel: PieLevel = PieLevel.SMALL,
     /** Top-level categories offered as a filter. */
     val filterOptions: List<CategoryEntity> = emptyList(),
@@ -118,7 +116,6 @@ private data class SelectionKey(
     val filterCategoryIds: Set<Long>?,
 )
 
-private const val TREND_MONTHS = 6
 private const val RANKING_SIZE = 8
 private const val DONUT_SLICES = 6
 
@@ -173,20 +170,18 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
     }.flatMapLatest { selection ->
         val today = LocalDate.now()
         val (startKey, endKey, label) = resolveRange(selection, today)
-        // The trend always ends with the selected window, so the chart stays in context.
-        val trendStart = DateKeys.parseMonthKey(endKey.take(7))
-            .minusMonths((TREND_MONTHS - 1).toLong())
-            .atDay(1)
-            .toString()
         val activeFilter = selection.filterCategoryIds
 
+        // Four aggregates and the category list. There used to be a fifth -- a six-month
+        // per-month roll-up for the trend chart -- which went with the chart: the totals
+        // card now carries the income/expense proportion itself, and a query nobody reads
+        // is a query that only costs.
         combine(
             repository.observeTotals(startKey, endKey, activeFilter),
             repository.observeCategoryTotals(startKey, endKey, activeFilter),
             repository.observeMainCategoryTotals(startKey, endKey, activeFilter),
-            repository.observeMonthTotals(trendStart, endKey, activeFilter),
             repository.observeCategories(CategoryKind.EXPENSE),
-        ) { totals, categoryTotals, mainTotals, months, categories ->
+        ) { totals, categoryTotals, mainTotals, categories ->
             // The 大类 view reuses the leaf ranking machinery by projecting the
             // roll-up onto the same shape.
             val source = if (selection.pieLevel == PieLevel.LARGE) {
@@ -207,7 +202,6 @@ class StatsViewModel(private val repository: LedgerRepository) : ViewModel() {
                 totals = totals,
                 topCategories = ranking,
                 donutSlices = collapseTail(ranking, totals.expenseCents),
-                months = months,
                 pieLevel = selection.pieLevel,
                 filterOptions = options,
                 // The dialog always shows a concrete set of tick boxes; "no filter" is

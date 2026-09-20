@@ -36,13 +36,6 @@ data class DayTotal(
     val expenseCents: Long,
 )
 
-/** Monthly income/expense, used by trend charts and the term overview. */
-data class MonthTotal(
-    val monthKey: String,
-    val incomeCents: Long,
-    val expenseCents: Long,
-)
-
 /** Row shape for the ledger list, joined so the UI needs no follow-up lookups. */
 data class TxnRow(
     val id: Long,

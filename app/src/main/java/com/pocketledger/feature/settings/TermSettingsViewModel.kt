@@ -106,12 +106,41 @@ class TermSettingsViewModel(private val repository: LedgerRepository) : ViewMode
             return end.toEpochDay() - start.toEpochDay() + 1
         }
 
-        /** 「2026 秋季学期」 for a date in the second half of the year, else 春季. */
-        fun suggestedTermName(today: LocalDate): String =
-            if (today.monthValue >= 7) "${today.year} 秋季学期" else "${today.year} 春季学期"
+        /**
+         * The boundary the defaults hang off: 3月1日 for 春季, 9月1日 for 秋季.
+         *
+         * A new term starts on the boundary that has most recently passed, so opening the
+         * editor in late September offers the autumn term that has just begun rather than
+         * today's date. In January the most recent boundary is still September's, which is
+         * right -- the autumn term is the one in progress.
+         */
+        fun defaultStart(today: LocalDate): LocalDate = when {
+            !today.isBefore(LocalDate.of(today.year, 9, 1)) -> LocalDate.of(today.year, 9, 1)
+            !today.isBefore(LocalDate.of(today.year, 3, 1)) -> LocalDate.of(today.year, 3, 1)
+            else -> LocalDate.of(today.year - 1, 9, 1)
+        }
 
-        /** A term defaults to roughly one semester starting today. */
-        fun defaultEndDate(today: LocalDate): String = today.plusMonths(4).minusDays(1).toString()
+        fun defaultStartDate(today: LocalDate): String = defaultStart(today).toString()
+
+        /**
+         * 「2026 秋季学期」 / 「2027 春季学期」, taken from the same boundary as the start
+         * date so the name and the dates can never describe different terms.
+         *
+         * There is deliberately no 秋季/春季 switch: the season is not a preference, it is
+         * what the date already says, and offering the choice would only add a way to get
+         * it wrong.
+         */
+        fun suggestedTermName(today: LocalDate): String {
+            val start = defaultStart(today)
+            val season = if (start.monthValue >= 7) "秋季学期" else "春季学期"
+            return "${start.year} $season"
+        }
+
+        /** A term runs one semester: four months from its start, both ends inclusive. */
+        fun defaultEndDate(startKey: String): String {
+            val start = runCatching { LocalDate.parse(startKey) }.getOrNull() ?: LocalDate.now()
+            return start.plusMonths(4).minusDays(1).toString()
+        }
 
         fun isValidRange(startKey: String, endKey: String): Boolean {
             val start = runCatching { LocalDate.parse(startKey) }.getOrNull() ?: return false

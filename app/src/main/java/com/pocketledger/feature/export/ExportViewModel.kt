@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.pocketledger.LedgerApp
-import com.pocketledger.data.backup.BackupScope
 import com.pocketledger.data.dao.TxnRow
 import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.TxnSource
@@ -28,24 +27,43 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Which rows the CSV covers.
+ *
+ * The ledger choice belongs here and only here: a CSV is a spreadsheet of transactions, so
+ * "which book" is a real question with a real answer. A backup is a copy of the
+ * application, and asking which part of it to copy would be asking the user to describe a
+ * state they never wanted.
+ */
+sealed interface CsvTarget {
+    /** Every active ledger, with the 账本 column filled in. */
+    data object AllLedgers : CsvTarget
+
+    data class One(val ledgerId: Long, val name: String) : CsvTarget
+}
+
 /** What to include in a CSV export. */
 enum class ExportScope(val label: String, val detail: String) {
-    ALL("全部记录", "当前账本的所有流水"),
+    ALL("全部记录", "所选账本的所有流水"),
     THIS_MONTH("本月", "只导出本月"),
 }
+
+/** One entry in the CSV target picker. */
+data class LedgerChoice(val id: Long, val name: String)
 
 data class ExportUiState(
     val totalCount: Int = 0,
     val monthCount: Int = 0,
     val ledgerName: String = "",
-    val ledgerCount: Int = 0,
+    val ledgers: List<LedgerChoice> = emptyList(),
+    val target: CsvTarget = CsvTarget.AllLedgers,
+    val targetPickerVisible: Boolean = false,
     val loaded: Boolean = false,
     /** Non-null once the CSV is built and waiting for a destination. */
     val pending: PendingExport? = null,
     val lastResult: String? = null,
     // ------------------------------------------------------------- application backup
-    val backupScope: BackupScope = BackupScope.ALL,
-    /** Non-null once the backup JSON is built and waiting for a destination. */
+    /** Non-null once the backup file is built and waiting for a destination. */
     val pendingBackup: PendingExport? = null,
     val backupResult: String? = null,
     /** Parsed backup awaiting the user's confirmation before it replaces everything. */
@@ -54,6 +72,16 @@ data class ExportUiState(
     val restoreResult: String? = null,
 ) {
     val hasData: Boolean get() = totalCount > 0
+
+    /** The name shown on the picker field. */
+    val targetLabel: String
+        get() = when (val current = target) {
+            CsvTarget.AllLedgers -> "全部账本"
+            is CsvTarget.One -> current.name
+        }
+
+    /** True when the file will carry several ledgers, so the 账本 column appears. */
+    val spansLedgers: Boolean get() = target is CsvTarget.AllLedgers && ledgers.size > 1
 }
 
 /** A built file plus the name to suggest for it. */
@@ -78,39 +106,96 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            val rows = repository.allRowsForExport()
-            val monthKey = DateKeys.monthKey(LocalDate.now())
-            val ledgers = repository.activeLedgers()
+            val ledgers = repository.activeLedgers().map { LedgerChoice(it.id, it.name) }
             val selected = repository.selectedLedgerId.value
+            val current = ledgers.firstOrNull { it.id == selected }
             _uiState.update {
                 it.copy(
-                    totalCount = rows.size,
-                    monthCount = rows.count { row -> row.localDateKey.startsWith(monthKey) },
-                    ledgerName = selected?.let { id -> ledgers.firstOrNull { l -> l.id == id }?.name }
-                        .orEmpty(),
-                    ledgerCount = ledgers.size,
+                    ledgers = ledgers,
+                    ledgerName = current?.name.orEmpty(),
+                    // Defaults to the ledger the user is looking at; 全部账本 is one tap
+                    // away in the picker.
+                    target = current?.let { choice -> CsvTarget.One(choice.id, choice.name) }
+                        ?: CsvTarget.AllLedgers,
                     loaded = true,
                 )
             }
+            refreshCounts()
         }
+    }
+
+    /** Both counts are recomputed whenever the target changes, so they always agree. */
+    private suspend fun refreshCounts() {
+        val state = _uiState.value
+        val ids = when (val target = state.target) {
+            CsvTarget.AllLedgers -> state.ledgers.map { it.id }
+            is CsvTarget.One -> listOf(target.ledgerId)
+        }
+        val monthKey = DateKeys.monthKey(LocalDate.now())
+        val rows = repository.rowsForExport(ids).map { it.row }
+        _uiState.update {
+            it.copy(
+                totalCount = rows.size,
+                monthCount = rows.count { row -> row.localDateKey.startsWith(monthKey) },
+            )
+        }
+    }
+
+    fun openTargetPicker() {
+        _uiState.update { it.copy(targetPickerVisible = true) }
+    }
+
+    fun dismissTargetPicker() {
+        _uiState.update { it.copy(targetPickerVisible = false) }
+    }
+
+    fun chooseAllLedgers() {
+        _uiState.update { it.copy(target = CsvTarget.AllLedgers, targetPickerVisible = false) }
+        viewModelScope.launch { refreshCounts() }
+    }
+
+    fun chooseLedger(choice: LedgerChoice) {
+        _uiState.update {
+            it.copy(target = CsvTarget.One(choice.id, choice.name), targetPickerVisible = false)
+        }
+        viewModelScope.launch { refreshCounts() }
     }
 
     fun prepare(scope: ExportScope) {
         viewModelScope.launch {
-            val rows = repository.allRowsForExport()
-            val categories = repository.categoriesSnapshot().associateBy { it.id }
-            val monthKey = DateKeys.monthKey(LocalDate.now())
-            val selected = when (scope) {
-                ExportScope.ALL -> rows
-                ExportScope.THIS_MONTH -> rows.filter { it.localDateKey.startsWith(monthKey) }
+            val state = _uiState.value
+            val ids = when (val target = state.target) {
+                CsvTarget.AllLedgers -> state.ledgers.map { it.id }
+                is CsvTarget.One -> listOf(target.ledgerId)
             }
-            val content = CsvExport.build(selected.map { it.toExportRow(categories) })
+            val names = state.ledgers.associate { it.id to it.name }
+            val spansLedgers = ids.size > 1
+            val monthKey = DateKeys.monthKey(LocalDate.now())
+            val categories = repository.categoriesSnapshot().associateBy { it.id }
+            val content = CsvExport.build(
+                repository.rowsForExport(ids)
+                    .filter { tagged ->
+                        scope == ExportScope.ALL ||
+                            tagged.row.localDateKey.startsWith(monthKey)
+                    }
+                    .map { tagged ->
+                        tagged.row.toExportRow(
+                            categories = categories,
+                            // Only filled in when the file covers more than one book.
+                            ledgerName = if (spansLedgers) {
+                                names[tagged.ledgerId].orEmpty()
+                            } else {
+                                ""
+                            },
+                        )
+                    }
+            )
             _uiState.update {
                 it.copy(
                     pending = PendingExport(
                         fileName = CsvExport.fileName(
                             appName = "记账本",
-                            ledgerName = it.ledgerName,
+                            ledgerName = it.targetLabel,
                             dateKey = DateKeys.dateKey(LocalDate.now()),
                         ),
                         content = content,
@@ -135,25 +220,20 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
 
     // --------------------------------------------------------------- app backup
 
-    fun setBackupScope(scope: BackupScope) {
-        _uiState.update { it.copy(backupScope = scope) }
-    }
-
     /**
      * Serialises the whole app into a file.
+     *
+     * No scope to choose: a backup is the application, and the only decision the user
+     * should have to make is where to put it.
      *
      * Runs off the main thread: the dump walks every row of every table through the
      * cursor, and on a ledger with a year of imported bills that is not a frame's worth
      * of work.
      */
     fun prepareBackup() {
-        val scope = _uiState.value.backupScope
         viewModelScope.launch {
             val file = withContext(Dispatchers.IO) {
                 container.backupService.export(
-                    scope = scope,
-                    ledgerId = repository.selectedLedgerId.value,
-                    ledgerName = repository.selectedLedger()?.name,
                     schemaVersion = container.schemaVersion,
                     appVersion = container.appVersion,
                 )
@@ -161,7 +241,10 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
             _uiState.update {
                 it.copy(
                     pendingBackup = PendingExport(
-                        fileName = backupFileName(scope, it.ledgerName, DateKeys.dateKey(LocalDate.now())),
+                        fileName = AppBackup.fileName(
+                            appName = "记账本",
+                            dateKey = DateKeys.dateKey(LocalDate.now()),
+                        ),
                         content = AppBackup.encode(file),
                     )
                 )
@@ -237,23 +320,16 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
 
         private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 
-        /** `记账本-备份-全部账本-2026-09-18.json`, matching the CSV naming. */
-        fun backupFileName(scope: BackupScope, ledgerName: String, dateKey: String): String {
-            val subject = if (scope == BackupScope.LEDGER && ledgerName.isNotBlank()) {
-                ledgerName
-            } else {
-                scope.label
-            }
-            return "记账本-备份-$subject-$dateKey.json"
-        }
-
         /**
          * Flattens one row for the spreadsheet.
          *
          * Money is written as a plain decimal string with no currency symbol, so a
          * spreadsheet reads the column as numbers rather than text.
          */
-        fun TxnRow.toExportRow(categories: Map<Long, CategoryEntity>): ExportRow {
+        fun TxnRow.toExportRow(
+            categories: Map<Long, CategoryEntity>,
+            ledgerName: String = "",
+        ): ExportRow {
             val mainName = mainCategoryId?.let { categories[it]?.name }.orEmpty()
             val time = Instant.ofEpochMilli(happenedAt)
                 .atZone(ZoneId.systemDefault())
@@ -271,6 +347,7 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
                 note = note.orEmpty(),
                 excluded = if (isExcludedFromStats) "是" else "否",
                 source = sourceLabel(source),
+                ledger = ledgerName,
             )
         }
 

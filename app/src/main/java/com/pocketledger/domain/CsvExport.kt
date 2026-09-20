@@ -5,6 +5,10 @@ package com.pocketledger.domain
  *
  * Deliberately plain strings rather than the entity: an export is read by a
  * spreadsheet, so the shape here is the spreadsheet's, not the database's.
+ *
+ * [ledger] is only filled in when the export covers more than one ledger; a single-ledger
+ * file keeps the column layout it has always had, so old spreadsheets and the import side
+ * are unaffected.
  */
 data class ExportRow(
     val dateKey: String,
@@ -19,6 +23,7 @@ data class ExportRow(
     val note: String,
     val excluded: String,
     val source: String,
+    val ledger: String = "",
 )
 
 /**
@@ -35,6 +40,9 @@ object CsvExport {
         "账户", "转入账户", "交易对象", "备注", "不计收支", "来源",
     )
 
+    /** Prepended when the file covers several ledgers, so each row can be attributed. */
+    const val LEDGER_HEADER = "账本"
+
     /**
      * A UTF-8 byte-order mark.
      *
@@ -46,19 +54,30 @@ object CsvExport {
 
     private const val NEWLINE = "\r\n"
 
-    fun build(rows: List<ExportRow>): String = buildString {
-        append(BOM)
-        append(HEADERS.joinToString(",") { escape(it) })
-        append(NEWLINE)
-        rows.forEach { row ->
-            append(
-                listOf(
+    /**
+     * Builds the file.
+     *
+     * The 账本 column appears only when at least one row carries a ledger name -- i.e. when
+     * the user exported more than one ledger. Deciding it from the rows rather than a
+     * separate flag means the two can never disagree.
+     */
+    fun build(rows: List<ExportRow>): String {
+        val withLedger = rows.any { it.ledger.isNotBlank() }
+        return buildString {
+            append(BOM)
+            val headers = if (withLedger) listOf(LEDGER_HEADER) + HEADERS else HEADERS
+            append(headers.joinToString(",") { escape(it) })
+            append(NEWLINE)
+            rows.forEach { row ->
+                val fields = listOf(
                     row.dateKey, row.time, row.type, row.mainCategory, row.category,
                     row.amountYuan, row.account, row.toAccount, row.merchant, row.note,
                     row.excluded, row.source,
-                ).joinToString(",") { escape(it) }
-            )
-            append(NEWLINE)
+                )
+                val line = if (withLedger) listOf(row.ledger) + fields else fields
+                append(line.joinToString(",") { escape(it) })
+                append(NEWLINE)
+            }
         }
     }
 
@@ -78,5 +97,4 @@ object CsvExport {
     fun fileName(appName: String, ledgerName: String, dateKey: String): String {
         val safeLedger = ledgerName.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "账本" }
         return "$appName-$safeLedger-${dateKey.replace("-", "")}.csv"
-    }
-}
+    }}

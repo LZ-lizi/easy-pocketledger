@@ -18,6 +18,7 @@ class CsvExportTest {
         merchant: String = "食堂",
         note: String = "",
         amount: String = "12.50",
+        ledger: String = "",
     ) = ExportRow(
         dateKey = "2026-09-16",
         time = "14:32",
@@ -31,6 +32,7 @@ class CsvExportTest {
         note = note,
         excluded = "否",
         source = "手动录入",
+        ledger = ledger,
     )
 
     @Test
@@ -99,6 +101,42 @@ class CsvExportTest {
         assertFalse(name.contains("/"))
         assertFalse(name.contains(":"))
         assertTrue(name.endsWith(".csv"))
+    }
+
+    /**
+     * A single-ledger export keeps the layout it has always had.
+     *
+     * The import side matches columns by header name, and existing spreadsheets have these
+     * twelve columns; adding a 账本 column to every file would be a silent change to both.
+     */
+    @Test
+    fun `one ledger means no ledger column`() {
+        val lines = CsvExport.build(listOf(row())).removePrefix(CsvExport.BOM).trim().split("\r\n")
+        assertEquals(CsvExport.HEADERS.joinToString(","), lines.first())
+        assertEquals(CsvExport.HEADERS.size, splitCsvLine(lines[1]).size)
+    }
+
+    /** Two books in one file are indistinguishable without saying which row is whose. */
+    @Test
+    fun `several ledgers add a ledger column, first`() {
+        val csv = CsvExport.build(listOf(row(ledger = "我的账本"), row(ledger = "游戏")))
+        val lines = csv.removePrefix(CsvExport.BOM).trim().split("\r\n")
+        assertEquals(
+            (listOf(CsvExport.LEDGER_HEADER) + CsvExport.HEADERS).joinToString(","),
+            lines.first(),
+        )
+        val first = splitCsvLine(lines[1])
+        assertEquals(CsvExport.HEADERS.size + 1, first.size)
+        assertEquals("我的账本", first[0])
+        assertEquals("食堂", first[1 + 8])   // 交易对象 moved one column right
+        assertEquals("游戏", splitCsvLine(lines[2])[0])
+    }
+
+    @Test
+    fun `a row with no ledger name does not add the column on its own`() {
+        // Deciding the shape from the rows means a mixed list cannot half-add a column.
+        val csv = CsvExport.build(listOf(row(ledger = "我的账本"), row()))
+        assertTrue(csv.removePrefix(CsvExport.BOM).startsWith(CsvExport.LEDGER_HEADER))
     }
 
     @Test

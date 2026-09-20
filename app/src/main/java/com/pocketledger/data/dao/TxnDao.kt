@@ -250,30 +250,6 @@ interface TxnDao {
     )
     fun observeDayTotals(ledgerId: Long, startKey: String, endKey: String): Flow<List<DayTotal>>
 
-    @Query(
-        """
-        SELECT substr(t.localDateKey, 1, 7) AS monthKey,
-               COALESCE(SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE 0 END), 0) AS incomeCents,
-               COALESCE(SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amountCents ELSE 0 END), 0) AS expenseCents
-        FROM txn t
-        LEFT JOIN category c ON c.id = t.categoryId
-        WHERE t.ledgerId = :ledgerId AND t.deletedAt IS NULL AND t.isExcludedFromStats = 0
-          AND t.localDateKey BETWEEN :startKey AND :endKey
-          AND (:filterOn = 0
-               OR c.id IN (:filterIds)
-               OR c.parentId IN (:filterIds))
-        GROUP BY monthKey
-        ORDER BY monthKey ASC
-        """
-    )
-    fun observeMonthTotals(
-        ledgerId: Long,
-        startKey: String,
-        endKey: String,
-        filterIds: List<Long>,
-        filterOn: Int,
-    ): Flow<List<MonthTotal>>
-
     @Query("SELECT * FROM txn WHERE id = :id")
     suspend fun byId(id: Long): TxnEntity?
 

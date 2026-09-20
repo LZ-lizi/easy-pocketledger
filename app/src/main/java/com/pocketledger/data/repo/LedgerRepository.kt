@@ -12,7 +12,6 @@ import com.pocketledger.data.dao.InstallmentDao
 import com.pocketledger.data.dao.ImportDao
 import com.pocketledger.data.dao.LedgerDao
 import com.pocketledger.data.dao.MainCategoryTotal
-import com.pocketledger.data.dao.MonthTotal
 import com.pocketledger.data.dao.PeriodTotals
 import com.pocketledger.data.dao.PlanPaidSummary
 import com.pocketledger.data.dao.TagDao
@@ -60,6 +59,14 @@ private const val WIDE_END_KEY = "9999-12-31"
  * filter is already more than anyone scrolls.
  */
 private const val SEARCH_LIMIT = 300
+
+/**
+ * One export row plus the ledger it came from.
+ *
+ * The ledger travels with the row because an export may cover several at once, and a CSV
+ * with two books' entries and no way to tell them apart is not an export.
+ */
+data class ExportTxnRow(val row: TxnRow, val ledgerId: Long)
 
 /** The small, read-only summary a home-screen widget renders. */
 data class WidgetSnapshot(
@@ -374,16 +381,6 @@ class LedgerRepository(
         return scoped { txnDao.observeDayTotals(it, start, end) }
     }
 
-    fun observeMonthTotals(
-        startDateKey: String,
-        endDateKey: String,
-        filterCategoryIds: Set<Long>? = null,
-    ): Flow<List<MonthTotal>> {
-        val (start, end) = DateKeys.range(startDateKey, endDateKey)
-        val (ids, on) = statsFilter(filterCategoryIds)
-        return scoped { txnDao.observeMonthTotals(it, start, end, ids, on) }
-    }
-
     suspend fun transaction(id: Long): TxnEntity? = txnDao.byId(id)
 
     /**
@@ -478,6 +475,23 @@ class LedgerRepository(
         val ledgerId = currentLedgerId.value ?: return emptyList()
         return txnDao.observeRows(ledgerId, WIDE_START_KEY, WIDE_END_KEY, null).first()
     }
+
+    /**
+     * Every row of one named ledger, for exporting a ledger other than the open one.
+     *
+     * [ledgerIds] may name several ledgers: the export screen offers 全部账本 as well. The
+     * rows come back tagged with the ledger they belong to, so a multi-ledger sheet can say
+     * which is which -- without that column the file would be a meaningless jumble of two
+     * books' entries.
+     */
+    suspend fun rowsForExport(ledgerIds: List<Long>): List<ExportTxnRow> =
+        ledgerIds.flatMap { ledgerId ->
+            txnDao.observeRows(ledgerId, WIDE_START_KEY, WIDE_END_KEY, null)
+                .first()
+                .map { ExportTxnRow(it, ledgerId) }
+        }
+
+    suspend fun activeLedgerChoices(): List<LedgerEntity> = ledgerDao.active()
 
     suspend fun existingDedupeHashes(): Set<String> =
         currentLedgerId.value?.let { txnDao.allDedupeHashes(it).toSet() } ?: emptySet()

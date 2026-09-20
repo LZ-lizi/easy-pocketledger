@@ -110,10 +110,6 @@ fun StatsScreen(
             item(key = "donut") { DonutCard(state = state, onPieLevel = viewModel::setPieLevel) }
         }
 
-        if (state.months.isNotEmpty()) {
-            item(key = "trend") { TrendCard(state) }
-        }
-
         if (state.topCategories.isNotEmpty()) {
             item(key = "ranking-title") {
                 Text(
@@ -402,10 +398,59 @@ private fun TotalsCard(state: StatsUiState) {
                 },
             )
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            // 收入 left, 支出 right, above the bar that splits between them, so each label
+            // sits over its own half.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 LabelledAmount("收入", state.totals.incomeCents, LedgerTheme.colors.income)
                 LabelledAmount("支出", state.totals.expenseCents, LedgerTheme.colors.expense)
             }
+            Spacer(Modifier.height(10.dp))
+            IncomeExpenseBar(state.totals.incomeCents, state.totals.expenseCents)
+        }
+    }
+}
+
+/**
+ * One bar split between what came in and what went out.
+ *
+ * This replaced a six-month bar chart below the card. The chart answered "how has this year
+ * gone", which the totals above it could not -- but it cost a whole card of vertical space
+ * for a shape most visits never looked at, while the *proportion* of income to expense is
+ * the thing the card is actually about. The two amounts were already printed side by side;
+ * a bar under them says the same thing without a second card.
+ *
+ * A month with income but no spending shows a bar that is entirely green, and vice versa.
+ * A period with neither draws an empty track rather than nothing, so the card does not
+ * change height between a quiet month and a busy one.
+ */
+@Composable
+private fun IncomeExpenseBar(incomeCents: Long, expenseCents: Long) {
+    val total = incomeCents + expenseCents
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(10.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        if (total > 0L && incomeCents > 0L) {
+            Box(
+                modifier = Modifier
+                    .weight(incomeCents.toFloat())
+                    .fillMaxHeight()
+                    .background(LedgerTheme.colors.income),
+            )
+        }
+        if (total > 0L && expenseCents > 0L) {
+            Box(
+                modifier = Modifier
+                    .weight(expenseCents.toFloat())
+                    .fillMaxHeight()
+                    .background(LedgerTheme.colors.expense),
+            )
         }
     }
 }
@@ -543,100 +588,6 @@ private fun LegendRow(slice: CategoryRank) {
             text = Money.formatWithSymbol(slice.totalCents),
             style = MoneyTextStyles.Small,
             color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-private fun TrendCard(state: StatsUiState) {
-    val ledger = LedgerTheme.colors
-    val peak = state.months.maxOfOrNull { maxOf(it.expenseCents, it.incomeCents) }
-        ?.coerceAtLeast(1L) ?: 1L
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "近半年趋势",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.weight(1f))
-                LegendDot("收入", ledger.income)
-                Spacer(Modifier.width(10.dp))
-                LegendDot("支出", ledger.expense)
-            }
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                state.months.forEach { month ->
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Bar(month.expenseCents, peak, ledger.expense, Modifier.weight(1f))
-                            Bar(month.incomeCents, peak, ledger.income, Modifier.weight(1f))
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = month.monthKey.takeLast(2).trimStart('0') + "月",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Bar(cents: Long, peak: Long, accent: Color, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxHeight(),
-        contentAlignment = Alignment.BottomCenter,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight((cents.toFloat() / peak).coerceIn(0f, 1f))
-                .clip(MaterialTheme.shapes.extraSmall)
-                .background(accent)
-        )
-    }
-}
-
-@Composable
-private fun LegendDot(label: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(accent)
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

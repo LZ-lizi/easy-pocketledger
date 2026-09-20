@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -307,10 +309,12 @@ private fun LedgerNavHost(
                                 // Keep each tab's own state and avoid stacking duplicates.
                                 popUpTo(Routes.LEDGER) { saveState = true }
                                 launchSingleTop = true
-                                // Settings always reopens at its top level: coming back to
-                                // a sub-page you left earlier is disorienting when you
-                                // tapped the tab expecting the menu.
-                                restoreState = target != Routes.SETTINGS
+                                // Every tab reopens at its **own root**. This used to be
+                                // off for 设置 only, so a sub-page left open in another tab
+                                // -- the search page under 明细, say -- was still sitting
+                                // there when you came back, and the way out was to press
+                                // back on a screen you had already navigated away from.
+                                restoreState = false
                             }
                         }
                     },
@@ -356,18 +360,34 @@ private fun LedgerNavHost(
                 ) + fadeOut(tween(TRANSITION_MS))
             },
             // Back always reverses the direction of travel, so popping never slides the
-            // same way as the push it is undoing.
+            // same way as the push it is undoing -- except for the full-window pages,
+            // which leave the way they arrived: instantly.
+            //
+            // 记账 / 编辑 / 详情 cover the whole screen with no dock, so closing one is not
+            // a step through a hierarchy, it is a panel being dismissed. Sliding it out
+            // while the page underneath slides in says "you are moving somewhere", and the
+            // user is not -- they are going back to where they were, and the motion only
+            // delays that. Nothing else changes: a sub-page still pops with its reverse
+            // slide.
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { width -> -width / 8 },
-                    animationSpec = tween(TRANSITION_MS),
-                ) + fadeIn(tween(TRANSITION_MS))
+                if (initialState.destination.route in FULL_SCREEN_ROUTES) {
+                    EnterTransition.None
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { width -> -width / 8 },
+                        animationSpec = tween(TRANSITION_MS),
+                    ) + fadeIn(tween(TRANSITION_MS))
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { width -> width / 8 },
-                    animationSpec = tween(TRANSITION_MS),
-                ) + fadeOut(tween(TRANSITION_MS))
+                if (initialState.destination.route in FULL_SCREEN_ROUTES) {
+                    ExitTransition.None
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { width -> width / 8 },
+                        animationSpec = tween(TRANSITION_MS),
+                    ) + fadeOut(tween(TRANSITION_MS))
+                }
             },
         ) {
             composable(Routes.LEDGER) {

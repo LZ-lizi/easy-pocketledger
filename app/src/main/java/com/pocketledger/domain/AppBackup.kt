@@ -45,6 +45,20 @@ object AppBackup {
     /** Format revision, independent of the database schema version. */
     const val VERSION = 1
 
+    /**
+     * The backup's own file extension.
+     *
+     * Deliberately not `.json`: a backup is not a file to open in an editor, and one named
+     * `….json` is exactly the file someone will later "fix" by hand, or that another app
+     * will offer to open and then rewrite. `.plbk` (PocketLedger BacKup) names this app and
+     * nothing else, so the system hands the file back here and nowhere else.
+     */
+    const val EXTENSION = "plbk"
+
+    /** `记账本-备份-20260920.plbk` */
+    fun fileName(appName: String, dateKey: String): String =
+        "$appName-备份-${dateKey.replace("-", "")}.$EXTENSION"
+
     /** Thrown for anything wrong with a file the user picked; the message is shown as-is. */
     class FormatException(message: String) : Exception(message)
 
@@ -55,21 +69,18 @@ object AppBackup {
     )
 
     /**
-     * A whole backup.
+     * A whole backup: every table of the database, plus the app-level settings.
      *
-     * [omittedTables] names tables a single-ledger export could not attribute to a ledger.
-     * It is recorded rather than silently dropped so a restore can say what it is missing
-     * instead of the user discovering it months later.
+     * There is deliberately no scope. A backup is what "put my app back" means, and a
+     * partial one restores into a state the user never had -- so the file is always
+     * everything, and choosing *which ledger* belongs to the CSV export instead.
      */
     data class File(
         val version: Int,
         val schemaVersion: Int,
         val createdAt: Long,
         val appVersion: String,
-        val scope: String,
-        val ledgerName: String?,
         val tables: Map<String, Table>,
-        val omittedTables: List<String> = emptyList(),
         val preferences: Map<String, Set<String>> = emptyMap(),
     ) {
         val rowCount: Int get() = tables.values.sumOf { it.rows.size }
@@ -89,8 +100,6 @@ object AppBackup {
             put("schemaVersion", file.schemaVersion)
             put("createdAt", file.createdAt)
             put("appVersion", file.appVersion)
-            put("scope", file.scope)
-            file.ledgerName?.let { put("ledgerName", it) }
             putJsonObject("tables") {
                 file.tables.forEach { (name, table) ->
                     putJsonObject(name) {
@@ -100,9 +109,6 @@ object AppBackup {
                         }
                     }
                 }
-            }
-            if (file.omittedTables.isNotEmpty()) {
-                putJsonArray("omittedTables") { file.omittedTables.forEach { add(it) } }
             }
             putJsonObject("preferences") {
                 file.preferences.forEach { (key, values) ->
@@ -140,12 +146,7 @@ object AppBackup {
             schemaVersion = root.long("schemaVersion")?.toInt() ?: 0,
             createdAt = root.long("createdAt") ?: 0L,
             appVersion = root.str("appVersion").orEmpty(),
-            scope = root.str("scope").orEmpty(),
-            ledgerName = root.str("ledgerName"),
             tables = tables.mapValues { (name, element) -> decodeTable(name, element) },
-            omittedTables = (root["omittedTables"] as? JsonArray)
-                ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-                .orEmpty(),
             preferences = (root["preferences"] as? JsonObject)
                 ?.mapValues { (_, element) ->
                     (element as? JsonArray)
