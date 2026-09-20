@@ -76,8 +76,7 @@ fun TermsOfUseScreen(
         item(key = "storage") {
             SectionCard(
                 title = "数据存放",
-                body = "全部数据保存在本机数据库里，不联网、不上传、没有账号。" +
-                    "卸载 App 会一并删除，重要数据请自行导出备份。",
+                body = "本应用全部数据均保存于本地，不上传网络，请及时备份好数据以免丢失。",
             )
         }
 

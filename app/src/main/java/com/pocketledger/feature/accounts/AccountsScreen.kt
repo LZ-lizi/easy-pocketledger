@@ -197,31 +197,7 @@ private fun NetWorthCard(state: AccountsUiState) {
                 style = MoneyTextStyles.Hero,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(Modifier.height(12.dp))
-            Row {
-                StatPill("资产", Money.format(state.assetsCents), LedgerTheme.colors.income)
-                Spacer(Modifier.width(14.dp))
-                StatPill("负债", Money.format(state.liabilitiesCents), LedgerTheme.colors.expense)
-            }
         }
-    }
-}
-
-@Composable
-private fun StatPill(label: String, amount: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(accent)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "$label $amount",
-            style = MoneyTextStyles.Small,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

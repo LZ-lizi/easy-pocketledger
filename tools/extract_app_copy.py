@@ -347,11 +347,16 @@ def unescape(raw):
 def with_marks(text):
     """Kotlin's `$name` / `${expr}` shown as an editable `{name}` marker.
 
+    Returns the display text and, for each marker, which of the two forms it came from.
+    The form has to be remembered: putting `${` back in front of a plain `$count` would
+    still compile, but it would change how the string is read and written by anyone who
+    opens the file next.
+
     The braces are balanced by hand rather than by a regular expression: an expression
     placeholder routinely contains braces of its own (`${x.ifBlank { "?" }}`), and a
     non-greedy pattern stops inside it and leaves the rest of the sentence mangled.
     """
-    out, i, n = [], 0, len(text)
+    out, marks, i, n = [], {}, 0, len(text)
     while i < n:
         ch = text[i]
         if ch == "$" and i + 1 < n and text[i + 1] == "{":
@@ -364,18 +369,22 @@ def with_marks(text):
                     if depth == 0:
                         break
                 j += 1
-            out.append("{%s}" % text[i + 2:j].strip())
+            name = text[i + 2:j].strip()
+            marks[name] = "braced"
+            out.append("{%s}" % name)
             i = j + 1
         elif ch == "$" and i + 1 < n and (text[i + 1].isalpha() or text[i + 1] == "_"):
             j = i + 1
             while j < n and (text[j].isalnum() or text[j] in "_."):
                 j += 1
-            out.append("{%s}" % text[i + 1:j])
+            name = text[i + 1:j]
+            marks[name] = "simple"
+            out.append("{%s}" % name)
             i = j
         else:
             out.append(ch)
             i += 1
-    return "".join(out)
+    return "".join(out), marks
 
 
 def pattern_table_at(text, offset):
@@ -550,10 +559,11 @@ def collect():
                 if copy_file or renders:
                     kept.append({
                         "file": relative, "line": line_of(text, start),
+                        "start": start, "end": literals[run[-1]][1],
                         "area": area_of(relative), "scene": scene_of(before, line_text),
                         "text": None, "raw": plain,
                         "where": prettify(where_of(blocks, start, text)),
-                        "source": "kt", "id": None, "marks": [],
+                        "source": "kt", "id": None,
                     })
                 else:
                     dropped.append({"file": relative, "line": line_of(text, start),
@@ -563,10 +573,10 @@ def collect():
     for row in kept:
         if row["source"] in ("res", "manifest") or row["text"]:
             continue
-        row["text"] = with_marks(row["raw"])
+        row["text"], row["marks"] = with_marks(row["raw"])
     for row in optional:
         if not row["text"]:
-            row["text"] = with_marks(row["raw"])
+            row["text"], row["marks"] = with_marks(row["raw"])
     return kept, dropped, optional
 
 
@@ -720,9 +730,16 @@ def main():
         if key not in grouped:
             row["places"] = []
             row["occurrences"] = 0
+            row["locations"] = []
             grouped[key] = row
         entry = grouped[key]
         entry["occurrences"] += 1
+        if row["source"] == "kt":
+            entry["locations"].append({
+                "file": row["file"], "line": row["line"],
+                "start": row["start"], "end": row["end"],
+                "raw": row["raw"], "marks": row["marks"],
+            })
         place = f"{row['area']} · {row['where']}" if row["where"] else row["area"]
         if place not in entry["places"]:
             entry["places"].append(place)
@@ -742,10 +759,12 @@ def main():
 
     print(f"kept {len(kept)} literals -> {len(rows)} distinct strings; "
           f"exported-file {len(optional)}; left out {len(dropped)}")
+    # The workbook assigns the 序号 the editor quotes back, so it has to be built first and
+    # the JSON written after, or the sidecar has no numbers in it.
+    interface, exported = write_workbook(rows, optional, dropped)
     with open(JSON_PATH, "w", encoding="utf-8", newline="\n") as handle:
         json.dump({"rows": rows, "optional": optional, "dropped": dropped},
                   handle, ensure_ascii=False, indent=1)
-    interface, exported = write_workbook(rows, optional, dropped)
     print(f"wrote {XLSX_PATH}: {interface} interface strings, {exported} exported-file")
     print("wrote", JSON_PATH)
 

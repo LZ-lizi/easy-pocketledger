@@ -50,3 +50,6 @@ __pycache__/
 # Scratch renders from the copy extractor
 /tools/_*
 
+
+# Local scratch from the copy round trip
+/tools/_*

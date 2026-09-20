@@ -19,6 +19,17 @@ import java.time.ZoneId
  */
 object DateKeys {
 
+    /**
+     * Bounds that sort outside every date the app can store.
+     *
+     * A range filter is a plain string comparison, so "everything" needs no query of its
+     * own: widen the two ends past the calendar and the ordinary `start <= key <= end`
+     * already says all of it. Year 0000 is not a real `LocalDate`, which is the point --
+     * no entry can be older than it.
+     */
+    const val EARLIEST_DATE_KEY = "0000-01-01"
+    const val LATEST_DATE_KEY = "9999-12-31"
+
     fun dateKey(date: LocalDate): String = date.toString()
 
     fun monthKey(date: LocalDate): String = YearMonth.from(date).toString()

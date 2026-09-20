@@ -123,7 +123,7 @@ fun StatsScreen(
         } else {
             item(key = "empty") {
                 Text(
-                    text = "这段时间还没有支出记录",
+                    text = "这段时间暂无支出记录",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 32.dp),
@@ -228,7 +228,7 @@ private fun CategoryFilterDialog(
                 }
                 if (draft.isEmpty()) {
                     Text(
-                        text = "一个类别都没选，统计会是空的。",
+                        text = "未选择任何类别",
                         style = MaterialTheme.typography.labelSmall,
                         color = LedgerTheme.colors.expense,
                         modifier = Modifier.padding(top = 6.dp),
@@ -294,14 +294,13 @@ private fun TermPicker(state: StatsUiState, onSelect: (Long) -> Unit) {
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    text = "还没有设置学期",
+                    text = "暂未设置学期",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "去「我的 → 学期设置」添加一个日期区间（比如 2026 秋季学期：9月1日 到 1月15日），" +
-                        "这里就能按学期看总账了。",
+                    text = "在「我的 → 学期设置」添加一个日期区间以查看学期总账",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

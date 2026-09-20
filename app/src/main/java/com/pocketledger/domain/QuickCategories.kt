@@ -17,11 +17,31 @@ import com.pocketledger.data.entity.CategoryEntity
  * seeded or reordered. Names rather than ids because presets are re-seeded per ledger and
  * ids are only meaningful inside one; a user who renames a category simply drops out of
  * the preferred set and the fallback fills the gap.
+ *
+ * [recentIds] is the *habit* list, not the history list: the caller has already decided
+ * which categories have been used enough times, recently enough, to count. This object
+ * only places them.
  */
 object QuickCategories {
 
     /** How many cells the grid shows before 「更多」. Four columns times three rows. */
     const val COUNT = 12
+
+    /**
+     * What it takes for a category to promote itself onto the first screen.
+     *
+     * Two entries inside a week. One is not a habit, and treating it as one rearranged the
+     * grid around whatever had just been tapped; the window is what makes it "used
+     * repeatedly lately" rather than "used twice ever", so a category someone tried once
+     * months ago does not come back to the front on the strength of it.
+     *
+     * The count and the window are applied in SQL (`TxnDao.recentCategoryIds`) because the
+     * alternative is loading a ledger's whole history to count it in Kotlin. They live
+     * here so the rule reads as one sentence rather than as two numbers inside a query.
+     */
+    const val HABIT_USES = 2
+    const val HABIT_WINDOW_DAYS = 7L
+    const val DAY_MILLIS = 24L * 60L * 60L * 1000L
 
     /**
      * The twelve a student most likely reaches for: every meal, the two ways of getting
@@ -39,10 +59,11 @@ object QuickCategories {
      *
      * Three tiers, and the order they are taken in matters:
      *
-     * 1. **Anything the user has actually recorded against.** A category someone reaches
-     *    for belongs on the first screen whatever any list says -- on a real ledger
-     *    「共享单车」 sat on the first row until the curated names were introduced and
-     *    pushed it off, even though it was the most recent thing recorded.
+     * 1. **Anything that has earned a place by habit.** Not "anything ever recorded
+     *    against": [recentIds] arrives already filtered to categories used repeatedly in a
+     *    short window (see `LedgerRepository.recentCategoryIds`), because a single entry
+     *    used to move a cell the moment it was saved and the grid rearranged itself around
+     *    whatever had just been tapped once.
      * 2. The curated [NAMES], in the order given, so the grid is sensible on a ledger
      *    with no history.
      * 3. Everything else, to keep the count at [COUNT] on a custom or trimmed tree.
@@ -92,4 +113,7 @@ object QuickCategories {
             )
         )
     }
+
+    /** The oldest entry time that still counts towards a habit, as of [now]. */
+    fun habitWindowStart(now: Long): Long = now - HABIT_WINDOW_DAYS * DAY_MILLIS
 }

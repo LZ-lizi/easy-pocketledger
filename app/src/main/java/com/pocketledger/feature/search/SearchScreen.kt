@@ -241,7 +241,7 @@ fun SearchScreen(
         if (state.loaded && state.results.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = if (state.hasFilters) "没有符合条件的记录" else "这个账本还没有记录",
+                    text = if (state.hasFilters) "没有符合条件的记录" else "此账本暂无记录",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp),
@@ -501,7 +501,7 @@ private fun AmountRangeDialog(
                     isError = maxText.isNotBlank() && max == null,
                 )
                 Text(
-                    text = "留空即不限制这一端。",
+                    text = "留空即不限制上限或下限",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

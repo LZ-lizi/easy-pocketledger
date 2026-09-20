@@ -182,7 +182,6 @@ fun EntryScreen(
             time = state.customTime,
             onPickDate = viewModel::setDate,
             onSetTime = viewModel::setTime,
-            onUseNow = viewModel::useCurrentTime,
             onDismiss = { dateTimeDialogVisible = false },
         )
     }
@@ -748,7 +747,6 @@ private fun DateTimeDialog(
     time: LocalTime?,
     onPickDate: (String) -> Unit,
     onSetTime: (Int, Int) -> Unit,
-    onUseNow: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val shown = time ?: LocalTime.now()
@@ -776,9 +774,6 @@ private fun DateTimeDialog(
                     muted = time == null,
                     onClick = { pickingTime = true },
                 )
-                if (time != null) {
-                    TextButton(onClick = onUseNow) { Text("改回当前时间") }
-                }
             }
         },
         confirmButton = {
@@ -885,7 +880,7 @@ private fun TransferPanel(
             textStyle = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            text = "转账不计入收支，只有手续费算支出。",
+            text = "转账不计入收支，仅手续费算入支出。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

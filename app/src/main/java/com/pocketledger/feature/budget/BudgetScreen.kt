@@ -125,7 +125,7 @@ fun BudgetSettingsScreen(
         if (state.leafRows.isEmpty()) {
             item(key = "leaf-empty") {
                 Text(
-                    text = "没有单独设限的类别。大类预算已覆盖的，不必再设一层。",
+                    text = "没有单独设限的类别。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -271,7 +271,7 @@ private fun TotalBudgetCard(row: BudgetRow, onClick: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = when {
-                    !row.isSet -> "点这里设一个月度上限（与明细页生活费同步）"
+                    !row.isSet -> "点这里设一个月度上限（与[明细]页生活费同步）"
                     progress.isOver -> "已超 " + Money.formatWithSymbol(-progress.remainingCents)
                     else -> "还剩 " + Money.formatWithSymbol(progress.remainingCents)
                 },
@@ -421,8 +421,7 @@ private fun BudgetEditorDialog(
                 }
                 Text(
                     text = if (row.categoryId == 0L) {
-                        "留空或填 0 表示取消。这个数字和明细页生活费卡片上的额度是同一个，" +
-                            "在任意一边改都会同步。"
+                        "留空或填 0 表示取消。与[明细]页预算同步。"
                     } else {
                         "留空或填 0 表示取消这个预算。"
                     },

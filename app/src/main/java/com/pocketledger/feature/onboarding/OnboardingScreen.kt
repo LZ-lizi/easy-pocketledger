@@ -56,7 +56,7 @@ fun OnboardingScreen(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "每个账本独立统计。之后可以再建账本，在「设置 → 账本」里切换。",
+            text = "每个账本独立统计。可在「设置 → 账本」里新建账本。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -80,7 +80,7 @@ fun OnboardingScreen(
 
         LedgerTypeCard(
             title = "预算模式",
-            detail = "有账户和余额，可以设每月生活费，首页显示「预算剩余」。",
+            detail = "增加账户与预算功能，适合日常生活费统计等。",
             accent = LedgerTheme.colors.daily,
             selected = state.type == LedgerType.BUDGET,
             onClick = { viewModel.setType(LedgerType.BUDGET) },
@@ -88,7 +88,7 @@ fun OnboardingScreen(
         Spacer(Modifier.height(10.dp))
         LedgerTypeCard(
             title = "累计模式",
-            detail = "只累计收入和支出，不涉及账户，首页显示本月收支。",
+            detail = "仅计算累计收入与支出，适合统计长期费用，无余额功能。",
             accent = LedgerTheme.colors.transfer,
             selected = state.type == LedgerType.ACCUMULATE,
             onClick = { viewModel.setType(LedgerType.ACCUMULATE) },

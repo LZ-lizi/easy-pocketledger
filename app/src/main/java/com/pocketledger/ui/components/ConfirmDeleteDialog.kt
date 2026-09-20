@@ -22,14 +22,16 @@ import com.pocketledger.ui.theme.LedgerTheme
  * without reading.
  *
  * [target] says what specifically will be removed, in the caller's own words, because
- * "are you sure?" without naming the thing is not a question anyone can answer.
+ * "are you sure?" without naming the thing is not a question anyone can answer. It may be
+ * left out where the title already names the thing and the line would only repeat it; when
+ * it is, nothing is drawn -- not an empty line -- so the dialog keeps its spacing.
  */
 @Composable
 fun ConfirmDeleteDialog(
     title: String,
-    target: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    target: String? = null,
     confirmLabel: String = "删除",
     enabled: Boolean = true,
 ) {
@@ -38,12 +40,14 @@ fun ConfirmDeleteDialog(
         title = { Text(title) },
         text = {
             Column {
-                Text(
-                    text = target,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(10.dp))
+                if (!target.isNullOrBlank()) {
+                    Text(
+                        text = target,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
                 Text(
                     text = "删除后无法恢复，请谨慎操作。",
                     style = MaterialTheme.typography.bodySmall,

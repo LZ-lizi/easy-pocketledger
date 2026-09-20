@@ -43,6 +43,7 @@ import com.pocketledger.data.entity.CategoryEntity
 import com.pocketledger.data.entity.CategoryKind
 import com.pocketledger.ui.components.ConfirmDeleteDialog
 import com.pocketledger.ui.components.DestructiveOutlinedButton
+import com.pocketledger.ui.components.DestructiveTextButton
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -269,10 +270,9 @@ private fun GroupHeader(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             )
             Spacer(Modifier.width(4.dp))
-            DestructiveOutlinedButton(
+            DestructiveTextButton(
                 label = "删除",
                 onClick = onDelete,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             )
         }
     }
@@ -333,16 +333,22 @@ private fun CategoryEditorDialog(
     var confirmDelete by remember { mutableStateOf(false) }
     var iconKey by remember { mutableStateOf(existing?.iconKey ?: "other") }
     var colorArgb by remember {
-        mutableStateOf(existing?.colorArgb?.takeIf { it != 0 } ?: COLOR_CHOICES.first())
+        // A 小类 added from a 大类 starts in that 大类's colour, so a new 餐饮 item is
+        // orange before it is anything else and the grid stays readable by area. Editing
+        // keeps whatever the category already has.
+        mutableStateOf(
+            existing?.colorArgb?.takeIf { it != 0 }
+                ?: parentOptions.firstOrNull { it.id == defaultParentId }
+                    ?.colorArgb?.takeIf { it != 0 }
+                ?: COLOR_CHOICES.first()
+        )
     }
 
     val isTopLevel = parentId == null
     val canSave = name.isNotBlank()
-    // A new 大类 gets its own button and a new 小类 always belongs to the group it was
-    // added from, so "本身就是大类" is only a meaningful choice while editing.
-    val allowTopLevel = existing != null
-    val showParentPicker = kind == CategoryKind.EXPENSE &&
-        (existing != null || defaultParentId != null)
+    // Only a 小类 has a 大类 to choose: a 大类 has no parent, and a 小类 is never promoted
+    // to one, so the level a category is created at is the level it keeps.
+    val showParentPicker = kind == CategoryKind.EXPENSE && parentId != null
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -380,9 +386,6 @@ private fun CategoryEditorDialog(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (allowTopLevel) {
-                            SelectChip("本身就是大类", isTopLevel) { parentId = null }
-                        }
                         parentOptions.forEach { parent ->
                             SelectChip(parent.name, parentId == parent.id) { parentId = parent.id }
                         }

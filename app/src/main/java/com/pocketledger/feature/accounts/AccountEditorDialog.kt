@@ -158,15 +158,18 @@ fun AccountEditorDialog(
                         singleLine = true,
                         prefix = { Text("¥") },
                         label = { Text("余额") },
-                        supportingText = {
-                            Text(
-                                text = if (existing == null) {
-                                    "记账从这里开始累加。"
-                                } else {
-                                    "改了就按新余额继续记账，之前的流水不会变。"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                        // Only a new account needs the line -- it is the one place the
+                        // balance has to be explained. An existing one explains itself,
+                        // and passing null rather than an empty block keeps the gap out.
+                        supportingText = if (existing == null) {
+                            {
+                                Text(
+                                    text = "记账从这里开始累加。",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        } else {
+                            null
                         },
                         isError = !balanceValid,
                     )

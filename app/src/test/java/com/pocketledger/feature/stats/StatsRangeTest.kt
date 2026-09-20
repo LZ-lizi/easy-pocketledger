@@ -92,6 +92,22 @@ class StatsRangeTest {
         assertEquals("2026年9月", label)
     }
 
+    /**
+     * 全部 has to reach past both ends of any real entry. The bound is compared as a
+     * string, so an early year has to sort below every `YYYY-MM-DD` that can exist --
+     * "0000-01-01" does and "1000-01-01" would not, because a four-digit year is fixed
+     * width but not fixed order.
+     */
+    @Test
+    fun `all mode covers everything ever recorded`() {
+        val (start, end, label) = resolveRange(selection(StatsRangeMode.ALL), today)
+        assertEquals("0000-01-01", start)
+        assertEquals("9999-12-31", end)
+        assertEquals("全部", label)
+        assertTrue("an entry from 1999 would fall outside 全部", "1999-05-04" >= start)
+        assertTrue("an entry from next year would fall outside 全部", "2027-03-01" <= end)
+    }
+
     @Test
     fun `every mode produces an ordered, non-empty range`() {
         val allTerms = listOf(term(1, "秋季", "2026-09-01", "2027-01-15"))

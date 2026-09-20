@@ -98,7 +98,7 @@ fun PinnedCategoriesScreen(
                     "当前显示前 ${state.defaultCount} 个类别，其余收在「更多」里。改动任意一项即转为自定义。"
                 } else {
                     "已自定义：${state.pinnedCount} 个类别直接显示，其余收在「更多」里。"
-                } + "\n收入类别数量少，始终全部显示，不参与这里的收纳。",
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

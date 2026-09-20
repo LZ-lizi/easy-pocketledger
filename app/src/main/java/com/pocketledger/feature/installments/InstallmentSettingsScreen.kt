@@ -115,7 +115,7 @@ fun InstallmentSettingsScreen(
 
         item(key = "hint") {
             Text(
-                text = "管理已添加的【月付】条目，进行添加、删除或编辑",
+                text = "管理已添加的[月付]条目，进行添加、删除或编辑",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -388,7 +388,7 @@ private fun InstallmentEditorDialog(
                         label = { Text("手续费（可留空）") },
                         supportingText = {
                             Text(
-                                text = "一次性收取，和第一期一起扣。",
+                                text = "与首次扣款同时一次性收取。",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         },
@@ -447,11 +447,6 @@ private fun InstallmentEditorDialog(
                         label = if (existing.isActive) "终止此计划" else "恢复此计划",
                         onClick = { onSetActive(existing, !existing.isActive) },
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "终止只影响之后的扣款，已经记下的账目不动。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

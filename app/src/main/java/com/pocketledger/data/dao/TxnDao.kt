@@ -278,17 +278,32 @@ interface TxnDao {
     )
     suspend fun recentMerchants(ledgerId: Long, limit: Int): List<String>
 
-    /** "Recently used" ordering is what keeps a flat category grid fast to tap. */
+    /**
+     * Categories that have earned a place on the first screen, most recent first.
+     *
+     * A single entry is not a habit: one tap used to promote a category immediately, which
+     * moved a cell the user had not asked to move and rearranged the grid around them. It
+     * now takes [minimum] uses inside the window that starts at [since] -- recorded
+     * recently, not merely dated recently, so back-filling last month's bills does not
+     * rearrange today's keypad.
+     */
     @Query(
         """
         SELECT categoryId FROM txn
         WHERE ledgerId = :ledgerId AND categoryId IS NOT NULL AND deletedAt IS NULL
+          AND createdAt >= :since
         GROUP BY categoryId
-        ORDER BY MAX(happenedAt) DESC
+        HAVING COUNT(*) >= :minimum
+        ORDER BY MAX(createdAt) DESC
         LIMIT :limit
         """
     )
-    suspend fun recentCategoryIds(ledgerId: Long, limit: Int): List<Long>
+    suspend fun recentCategoryIds(
+        ledgerId: Long,
+        since: Long,
+        minimum: Int,
+        limit: Int,
+    ): List<Long>
 
     // ------------------------------------------------------------- dedupe / import
 

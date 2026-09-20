@@ -180,8 +180,7 @@ fun ExportScreen(
         item(key = "csv-title") {
             SectionTitle(
                 title = "导出账单",
-                detail = "导出所选账本为 CSV 文件，可用表格软件打开；" +
-                    "选「全部账本」时会多一列「账本」。",
+                detail = "导出所选账本为 CSV 文件。",
             )
         }
 
@@ -236,15 +235,14 @@ fun ExportScreen(
         item(key = "backup-title") {
             SectionTitle(
                 title = "应用备份",
-                detail = "把记账、账本、账户、余额、类别和设置「全部」存成一个文件。" +
-                    "备份不可选范围，恢复时用这个文件覆盖当前全部数据。",
+                detail = "存储全部应用数据为备份文件，以供恢复数据用。",
             )
         }
 
         item(key = "backup-export") {
             ActionCard(
                 title = "导出备份文件",
-                detail = "保存为 .${AppBackup.EXTENSION} 文件，可以拷到别的设备或云盘",
+                detail = "保存为 .${AppBackup.EXTENSION} 文件，供恢复数据用。",
                 enabled = state.pendingBackup == null && !state.restoring,
                 onClick = viewModel::prepareBackup,
             )
@@ -353,12 +351,12 @@ private fun TargetPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导出哪个账本") },
+        title = { Text("选择需要导出的账本") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 PickerRow(
                     label = "全部账本",
-                    detail = "每个账本各占一列「账本」区分",
+                    detail = null,
                     selected = selected is CsvTarget.AllLedgers,
                     onClick = onAll,
                 )
@@ -440,8 +438,7 @@ private fun RestoreConfirmDialog(
         text = {
             Column {
                 Text(
-                    text = "将用这个备份覆盖当前全部数据：" +
-                        "${file.tables.size} 张表、${file.rowCount} 条记录。",
+                    text = "将使用此备份覆盖当前全部数据：${file.tables.size} 张表、${file.rowCount} 条记录。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

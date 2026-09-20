@@ -437,11 +437,6 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Drops back to "use the current time" and hides the time again. */
-    fun useCurrentTime() {
-        _uiState.update { it.copy(customTime = null) }
-    }
-
     // -------------------------------------------------------------------- saving
 
     fun save(onSaved: () -> Unit) {

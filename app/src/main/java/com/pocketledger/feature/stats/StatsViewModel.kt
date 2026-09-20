@@ -26,14 +26,16 @@ import java.time.LocalDate
  * The statistical window.
  *
  * Deliberately a small set of presets rather than a free date-range picker: the
- * three questions actually asked of a ledger are "this month", "this term" and
- * "how has this year gone", and a picker answers none of them faster.
+ * questions actually asked of a ledger are "this month", "this term", "how has this
+ * year gone" and "what has this ledger cost me in total", and a picker answers none of
+ * them faster.
  */
 enum class StatsRangeMode(val label: String) {
     MONTH("本月"),
     LAST_30_DAYS("近30天"),
     YEAR("今年"),
     TERM("学期"),
+    ALL("全部"),
 }
 
 /** One row of the spending ranking, also used to build the donut's wedges. */
@@ -286,6 +288,14 @@ internal fun resolveRange(
             Triple(term.startDateKey, term.endDateKey, term.name)
         }
     }
+
+    // Everything the ledger holds. The keys are compared as strings, so the bounds only
+    // have to sort outside any real date; see [DateKeys.EARLIEST_DATE_KEY].
+    StatsRangeMode.ALL -> Triple(
+        DateKeys.EARLIEST_DATE_KEY,
+        DateKeys.LATEST_DATE_KEY,
+        "全部",
+    )
 }
 
 internal fun buildRanking(

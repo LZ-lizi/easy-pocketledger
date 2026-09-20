@@ -275,7 +275,7 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
     fun stageRestore(text: String) {
         val parsed = runCatching { AppBackup.decode(text) }.getOrElse { error ->
             _uiState.update {
-                it.copy(restoreResult = error.message ?: "备份文件读不了。", pendingRestore = null)
+                it.copy(restoreResult = error.message ?: "备份文件不可读。", pendingRestore = null)
             }
             return
         }
@@ -283,7 +283,7 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun onRestoreReadFailed() {
-        _uiState.update { it.copy(restoreResult = "读不到这个文件，请换一个再试。") }
+        _uiState.update { it.copy(restoreResult = "读不到这个文件，请重试。") }
     }
 
     fun dismissRestore() {

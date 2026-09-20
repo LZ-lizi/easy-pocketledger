@@ -362,13 +362,13 @@ private fun AllowanceCard(
         Column(Modifier.padding(20.dp)) {
             if (allowance == null) {
                 Text(
-                    text = "还没有设置生活费",
+                    text = "还没有设置预算",
                     style = MaterialTheme.typography.titleMedium,
                     color = scheme.onSurface,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "点这里填写每月生活费，首页就会显示「预算剩余」和日均可用。",
+                    text = "点击填写每月预算。",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
@@ -416,7 +416,7 @@ private fun AllowanceCard(
                     text = if (allowance.hasBudget) {
                         "日均可用 ${Money.formatWithSymbol(allowance.dailyAvailableCents)}"
                     } else {
-                        "点这里设置每月生活费，就能看到「预算剩余」和日均可用"
+                        "点击设置每月预算。"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (allowance.hasBudget && allowance.isOverBudget) {
@@ -725,13 +725,13 @@ private fun EmptyLedgerHint(hasDayFilter: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = if (hasDayFilter) "这天没有记录" else "这个月还没有记录",
+            text = if (hasDayFilter) "这天没有记录" else "本月没有记录",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (hasDayFilter) "换一天看看，或点右下角记一笔" else "点右下角的按钮开始记一笔",
+            text = if (hasDayFilter) "换一天看看，或点右下角记一笔" else "点[+]开始记一笔",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -752,11 +752,11 @@ private fun AllowanceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("$monthLabel 生活费") },
+        title = { Text("$monthLabel 预算") },
         text = {
             Column {
                 Text(
-                    text = "填每月到手的钱。之后没设置的月份会自动沿用这一次的额度。",
+                    text = "输入每月预算，后续月份若未单独设置将沿用此数值",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

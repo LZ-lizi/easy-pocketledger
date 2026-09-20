@@ -85,7 +85,7 @@ fun EditScreen(
 
         if (state.missing) {
             Text(
-                text = "这笔记录已经不存在了",
+                text = "这笔记录已被删除",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -195,18 +195,12 @@ fun EditScreen(
 
         if (state.canExcludeFromStats) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "不计收支",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "比如退款、账户互转，记下来但不进统计。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "不计收支",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
                 Switch(
                     checked = state.isExcludedFromStats,
                     onCheckedChange = viewModel::setExcludedFromStats,
@@ -216,7 +210,7 @@ fun EditScreen(
 
         if (state.ledgerArchived) {
             Text(
-                text = "这个账本已归档，不能再修改记录。需要改动就先在「账本管理」里取消归档。",
+                text = "此账本已归档，无法修改",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -240,7 +234,6 @@ fun EditScreen(
     if (confirmDelete) {
         ConfirmDeleteDialog(
             title = "删除这笔记录",
-            target = "这笔记录删除后，余额和统计会立刻跟着更新。",
             onConfirm = {
                 confirmDelete = false
                 viewModel.delete(onClose)
@@ -473,7 +466,7 @@ private fun DateTimeFields(
             onClick = { pickingTime = true },
         )
         if (time != null) {
-            TextButton(onClick = onClearTime) { Text("改回原始时间") }
+            TextButton(onClick = onClearTime) { Text("改回当前时间") }
         }
     }
 
@@ -546,7 +539,7 @@ private fun SaveRow(
             text = if (enabled) {
                 "保存 ${Money.formatWithSymbol(amountCents)}"
             } else {
-                "金额、分类和账户都要填"
+                "请填写金额、分类和账户"
             },
             style = MaterialTheme.typography.titleMedium,
             color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,

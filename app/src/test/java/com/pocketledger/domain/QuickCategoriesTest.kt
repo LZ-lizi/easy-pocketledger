@@ -97,12 +97,34 @@ class QuickCategoriesTest {
     fun `a category the user actually uses beats the curated list`() {
         // Found on a real ledger: 共享单车 was the most recent entry recorded, and naming
         // the defaults explicitly pushed it off the first screen because 共享单车 is not
-        // one of the twelve names. Use wins.
+        // one of the twelve names. Use wins -- once it has become a habit, which the
+        // repository decides before handing the ids over.
         val bike = asSeedOrder.first { it.name == "共享单车" }
         val ordered = listOf(bike) + asSeedOrder.filter { it.id != bike.id }
         val picked = QuickCategories.select(ordered, recentIds = listOf(bike.id))
         assertEquals("共享单车", picked.first().name)
         assertTrue(picked.size == QuickCategories.COUNT)
+    }
+
+    /**
+     * The one number a future edit could quietly undo: "used once" must not promote.
+     *
+     * The count is applied in SQL, so this guards the policy rather than the query -- but
+     * the policy is the requirement, and lowering it to 1 would restore exactly the
+     * behaviour that was reported as a bug.
+     */
+    @Test
+    fun `one use is not enough to promote a category`() {
+        assertTrue("a single entry must not make a category a habit",
+            QuickCategories.HABIT_USES >= 2)
+        assertTrue("the window has to be a real span of days",
+            QuickCategories.HABIT_WINDOW_DAYS >= 1)
+        // The window is a *recent* window, not "any time ever".
+        val now = 1_000_000_000_000L
+        assertEquals(
+            now - QuickCategories.HABIT_WINDOW_DAYS * QuickCategories.DAY_MILLIS,
+            QuickCategories.habitWindowStart(now),
+        )
     }
 
     @Test

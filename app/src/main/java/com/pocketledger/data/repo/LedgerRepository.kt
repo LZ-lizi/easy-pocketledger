@@ -36,6 +36,7 @@ import com.pocketledger.data.entity.TermEntity
 import com.pocketledger.data.entity.TxnEntity
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.DateKeys
+import com.pocketledger.domain.QuickCategories
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -48,8 +49,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 
 /** Wide enough to cover any date a person will enter, and still a plain string range. */
-private const val WIDE_START_KEY = "0000-01-01"
-private const val WIDE_END_KEY = "9999-12-31"
+private const val WIDE_START_KEY = DateKeys.EARLIEST_DATE_KEY
+private const val WIDE_END_KEY = DateKeys.LATEST_DATE_KEY
 
 /**
  * How many search hits are shown.
@@ -456,11 +457,23 @@ class LedgerRepository(
         currentLedgerId.value?.let { txnDao.recentMerchants(it, limit) } ?: emptyList()
 
     /**
-     * Recently used categories, which is what keeps a flat two-level grid quick to
-     * tap: the four or five categories someone actually uses sit within reach.
+     * Categories that have earned a place on the keypad's first screen.
+     *
+     * See [TxnDao.recentCategoryIds]: a category has to have been used [QuickCategories.HABIT_USES]
+     * times inside [QuickCategories.HABIT_WINDOW_DAYS] days to qualify, so one tap does not
+     * rearrange the grid.
      */
-    suspend fun recentCategoryIds(limit: Int = 12): List<Long> =
-        currentLedgerId.value?.let { txnDao.recentCategoryIds(it, limit) } ?: emptyList()
+    suspend fun recentCategoryIds(
+        limit: Int = 12,
+        now: Long = System.currentTimeMillis(),
+    ): List<Long> = currentLedgerId.value?.let {
+        txnDao.recentCategoryIds(
+            it,
+            QuickCategories.habitWindowStart(now),
+            QuickCategories.HABIT_USES,
+            limit,
+        )
+    } ?: emptyList()
 
     suspend fun transactionCount(): Int = currentLedgerId.value?.let { txnDao.count(it) } ?: 0
 

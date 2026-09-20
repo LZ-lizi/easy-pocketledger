@@ -317,7 +317,7 @@ private fun ReviewSummary(state: ImportUiState) {
             }
             if (state.allDuplicates) {
                 Text(
-                    text = "这个文件里的记录都已经在账本里了。",
+                    text = "此文件里的记录已被全部导入。",
                     style = MaterialTheme.typography.labelSmall,
                     color = LedgerTheme.colors.income,
                 )
@@ -419,7 +419,7 @@ private fun AccountPicker(
             // to go and create a pickable one was asking them to fight the mode they
             // chose, so the rows simply go where the entry keypad already puts them.
             Text(
-                text = "累计模式的账本不记账户，记录会记入它自己的内部账户。",
+                text = "累计模式的账本无账户功能。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -466,14 +466,9 @@ private fun InferredNotice(count: Int, onAllExpense: () -> Unit, onAllIncome: ()
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = "这个文件没有「收/支」列，$count 条的收支方向是推测出来的。",
+                text = "这个文件没有「收/支」列，$count 条的收支方向为预测得出。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = "点每条右侧的「支出/收入」可以单独改；如果整体反了，用下面的按钮一次改完。",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onAllExpense) { Text("全部改为支出") }

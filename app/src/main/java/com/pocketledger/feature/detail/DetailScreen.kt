@@ -93,7 +93,7 @@ fun DetailScreen(
         if (state.missing) {
             item(key = "missing") {
                 Text(
-                    text = "这笔记录已经不存在了",
+                    text = "这笔记录已被删除",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 32.dp),
@@ -111,7 +111,7 @@ fun DetailScreen(
                 // Read-only rather than a disabled button: a greyed-out control invites
                 // tapping and never explains itself.
                 Text(
-                    text = "这个账本已归档，不能再修改记录。需要改动就先在「账本管理」里取消归档。",
+                    text = "此账本已归档，无法修改",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier

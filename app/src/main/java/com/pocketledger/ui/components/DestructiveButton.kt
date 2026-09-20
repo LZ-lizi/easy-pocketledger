@@ -6,6 +6,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,37 @@ fun DestructiveOutlinedButton(
         border = BorderStroke(1.dp, accent.copy(alpha = if (enabled) 0.6f else 0.3f)),
         contentPadding = contentPadding,
         colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = accent,
+            disabledContentColor = accent.copy(alpha = 0.38f),
+        ),
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * The same action with no outline, for a row that is already a control.
+ *
+ * The outline exists to say "this is pressable" when the button stands alone under a form.
+ * In the 大类 header it does the opposite: the row is a tinted card with its own 「添加」
+ * action in it, so a bordered box next to plain text reads as a second, competing card
+ * rather than as a button. The colour still carries the warning.
+ */
+@Composable
+fun DestructiveTextButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+) {
+    val accent = LedgerTheme.colors.expense
+    TextButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(
             contentColor = accent,
             disabledContentColor = accent.copy(alpha = 0.38f),
         ),
