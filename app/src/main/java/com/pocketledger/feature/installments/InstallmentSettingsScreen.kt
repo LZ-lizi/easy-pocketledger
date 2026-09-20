@@ -332,110 +332,116 @@ private fun InstallmentEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "新建月付" else "编辑月付") },
         text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("名称") },
-                )
-
-                OutlinedTextField(
-                    value = totalInput,
-                    onValueChange = { totalInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    prefix = { Text("¥") },
-                    label = { Text("总金额") },
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = 460.dp)) {
+                // The fields scroll; the destructive action below does not. As the
+                // last item *inside* the scrolling column, 「终止此计划」 was entirely
+                // below the fold on a real phone -- the button existed and could not
+                // be seen, let alone pressed.
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     OutlinedTextField(
-                        value = periodCountInput,
-                        onValueChange = { periodCountInput = it.filter(Char::isDigit).take(3) },
-                        modifier = Modifier.weight(1f),
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("期数") },
-                        isError = periodCount == null || periodCount !in 1..120,
+                        label = { Text("名称") },
                     )
-                    OutlinedTextField(
-                        value = repayDayInput,
-                        onValueChange = { repayDayInput = it.filter(Char::isDigit).take(2) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        label = { Text("还款日") },
-                        isError = repayDay == null || repayDay !in 1..31,
-                    )
-                }
 
-                OutlinedTextField(
-                    value = feeInput,
-                    onValueChange = { feeInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    prefix = { Text("¥") },
-                    label = { Text("手续费（可留空）") },
-                    supportingText = {
-                        Text(
-                            text = "一次性收取，和第一期一起扣。",
-                            style = MaterialTheme.typography.labelSmall,
+                    OutlinedTextField(
+                        value = totalInput,
+                        onValueChange = { totalInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        prefix = { Text("¥") },
+                        label = { Text("总金额") },
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = periodCountInput,
+                            onValueChange = { periodCountInput = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("期数") },
+                            isError = periodCount == null || periodCount !in 1..120,
                         )
-                    },
-                    isError = feeCents == null,
-                )
+                        OutlinedTextField(
+                            value = repayDayInput,
+                            onValueChange = { repayDayInput = it.filter(Char::isDigit).take(2) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("还款日") },
+                            isError = repayDay == null || repayDay !in 1..31,
+                        )
+                    }
 
-                if (perPeriod > 0L) {
-                    Text(
-                        text = "每期约 ${Money.formatWithSymbol(perPeriod)}" +
-                            (finalDue?.let { "，最后一期在 $it" } ?: ""),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    OutlinedTextField(
+                        value = feeInput,
+                        onValueChange = { feeInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        prefix = { Text("¥") },
+                        label = { Text("手续费（可留空）") },
+                        supportingText = {
+                            Text(
+                                text = "一次性收取，和第一期一起扣。",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        },
+                        isError = feeCents == null,
                     )
-                }
 
-                DatePickField(
-                    label = "起始日期",
-                    dateKey = startDateInput,
-                    onPick = { startDateInput = it },
-                )
+                    if (perPeriod > 0L) {
+                        Text(
+                            text = "每期约 ${Money.formatWithSymbol(perPeriod)}" +
+                                (finalDue?.let { "，最后一期在 $it" } ?: ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
 
-                if (accounts.isNotEmpty()) {
-                    Text(
-                        text = "关联账户",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    DatePickField(
+                        label = "起始日期",
+                        dateKey = startDateInput,
+                        onPick = { startDateInput = it },
                     )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        accounts.forEach { account ->
-                            SelectChip(account.name, accountId == account.id) {
-                                accountId = account.id
+
+                    if (accounts.isNotEmpty()) {
+                        Text(
+                            text = "关联账户",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            accounts.forEach { account ->
+                                SelectChip(account.name, accountId == account.id) {
+                                    accountId = account.id
+                                }
                             }
                         }
                     }
-                }
 
-                if (categories.isNotEmpty()) {
-                    Text(
-                        text = "关联类别",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    CategoryPickerField(
-                        categories = categories,
-                        selectedId = categoryId,
-                        onSelect = { categoryId = it },
-                    )
-                }
+                    if (categories.isNotEmpty()) {
+                        Text(
+                            text = "关联类别",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        CategoryPickerField(
+                            categories = categories,
+                            selectedId = categoryId,
+                            onSelect = { categoryId = it },
+                        )
+                    }
 
+                }
                 if (existing != null) {
                     DestructiveOutlinedButton(
                         label = if (existing.isActive) "终止此计划" else "恢复此计划",

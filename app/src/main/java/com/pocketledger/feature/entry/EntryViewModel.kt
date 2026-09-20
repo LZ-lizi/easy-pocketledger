@@ -114,6 +114,15 @@ data class EntryUiState(
     val hasCustomTime: Boolean get() = customTime != null
 
     /**
+     * The chosen category's name, for the compact 月付 picker.
+     *
+     * The monthly panel shows one field rather than a grid of chips, so it has to name the
+     * current choice; a null id is a legitimate state there ("不指定").
+     */
+    val selectedCategoryName: String?
+        get() = selectedCategoryId?.let { id -> allCategories.firstOrNull { it.id == id }?.name }
+
+    /**
      * The account a saved entry attaches to.
      *
      * The picked account when there is one, otherwise the ledger's hidden account --
@@ -362,6 +371,11 @@ class EntryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun selectCategory(id: Long) {
         _uiState.update { it.copy(selectedCategoryId = id) }
+    }
+
+    /** Back to "no category", which only 月付 allows. */
+    fun clearCategory() {
+        _uiState.update { it.copy(selectedCategoryId = null) }
     }
 
     fun selectAccount(id: Long) {

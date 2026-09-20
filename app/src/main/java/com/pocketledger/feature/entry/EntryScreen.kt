@@ -1,5 +1,6 @@
 package com.pocketledger.feature.entry
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,7 +29,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +53,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketledger.data.entity.AccountEntity
 import com.pocketledger.data.entity.CategoryEntity
+import com.pocketledger.domain.CategoryGridLayout
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.CalendarPickerDialog
 import com.pocketledger.ui.components.LedgerIcon
@@ -59,7 +63,6 @@ import com.pocketledger.ui.theme.LedgerTheme
 import com.pocketledger.ui.theme.MoneyTextStyles
 import com.pocketledger.ui.util.DateLabels
 import java.time.LocalTime
-import kotlin.math.floor
 
 private val KEYPAD_ROWS = listOf(
     listOf("1", "2", "3"),
@@ -125,6 +128,7 @@ fun EntryScreen(
                 onRepayDayChange = viewModel::setPlanRepayDay,
                 onFeeChange = viewModel::setPlanFee,
                 onSelectCategory = viewModel::selectCategory,
+            onClearCategory = viewModel::clearCategory,
                 onSelectAccount = viewModel::selectAccount,
                 modifier = Modifier.weight(1f),
             )
@@ -357,14 +361,25 @@ private fun CategoryGrid(
         ) {
             val pitch = CategoryCellHeight + CategoryRowSpacing
             val usable = (maxHeight - CategoryGridPadding * 2).coerceAtLeast(CategoryCellHeight)
-            // Whole rows only, and never more than the list actually needs -- an
-            // income ledger has six leaves and should not reserve three empty rows.
-            val fits = floor(usable.value / pitch.value).toInt().coerceAtLeast(1)
-            val needed = (state.visibleCategories.size + (if (state.hasHiddenCategories) 1 else 0) + 3) / 4
-            val rows = minOf(fits, maxOf(needed, 1))
+            val fits = CategoryGridLayout.rowsThatFit(usable.value, pitch.value)
+            // The count and the row count are decided together: when categories are held
+            // back behind 「更多」, the cell for it has to come out of this grid's capacity,
+            // or it lands in a row that does not exist. See [CategoryGridLayout].
+            val rows = CategoryGridLayout.rows(
+                categoryCount = state.visibleCategories.size,
+                hasMore = state.hasHiddenCategories,
+                fitRows = fits,
+            )
+            val shown = state.visibleCategories.take(
+                CategoryGridLayout.visibleCount(
+                    categoryCount = state.visibleCategories.size,
+                    hasMore = state.hasHiddenCategories,
+                    rows = rows,
+                )
+            )
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                columns = GridCells.Fixed(CategoryGridLayout.COLUMNS),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(CategoryCellHeight * rows + CategoryRowSpacing * (rows - 1) + CategoryGridPadding * 2),
@@ -372,7 +387,7 @@ private fun CategoryGrid(
                 verticalArrangement = Arrangement.spacedBy(CategoryRowSpacing),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                items(state.visibleCategories, key = { it.id }) { category ->
+                items(shown, key = { it.id }) { category ->
                     CategoryCell(
                         category = category,
                         selected = category.id == state.selectedCategoryId,
@@ -416,6 +431,8 @@ private fun CategoryMoreDialog(
     selectedId: Long?,
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
+    /** When given, a 「不指定」 chip is offered -- only 月付 tolerates no category. */
+    onClear: (() -> Unit)? = null,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -453,6 +470,16 @@ private fun CategoryMoreDialog(
                     modifier = Modifier.padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
+                    if (onClear != null) {
+                        item(key = "clear") {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ClearChip(selected = selectedId == null) {
+                                    onClear()
+                                    onDismiss()
+                                }
+                            }
+                        }
+                    }
                     groups.forEach { group ->
                         item(key = group.key) {
                             CategoryGroupBlock(
@@ -509,6 +536,39 @@ private fun CategoryGroupBlock(
 }
 
 /**
+ * 「不指定」 in the full-tree dialog: clears the category rather than picking one.
+ *
+ * Only offered where a missing category is legitimate, so this is a chip of its own rather
+ * than a sentinel id that the expense grid would have to learn to ignore.
+ */
+@Composable
+private fun ClearChip(selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = "不指定",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+/**
  * The 月付 form.
  *
  * The keypad amount is the plan's total, so only the schedule details are asked for
@@ -524,6 +584,7 @@ private fun MonthlyPanel(
     onRepayDayChange: (String) -> Unit,
     onFeeChange: (String) -> Unit,
     onSelectCategory: (Long) -> Unit,
+    onClearCategory: () -> Unit,
     onSelectAccount: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -594,41 +655,36 @@ private fun MonthlyPanel(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // Wrapped rather than a horizontally scrolling row: a scroll strip shows two
-            // and a half chips, which reads as the list being broken off rather than as
-            // something to swipe.
-            FlowRow(
+            // One field instead of a wrapping grid of chips.
+            //
+            // The panel sits in a fixed-height slot between the amount and the keypad, and
+            // twelve chips took three rows -- the third fell below the fold, and the
+            // 「更多」 chip that was the only way to reach the other thirty categories went
+            // with it. On a real phone that read as 「月付的类目显示不全」, with the one
+            // control that fixed it invisible. A popup sizes itself to its content and
+            // scrolls independently, so no category list can clip it; 月付管理 already
+            // asks for a category exactly this way, for exactly this reason.
+            OutlinedButton(
+                onClick = { moreOpen = true },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
             ) {
-                state.visibleCategories.forEach { category ->
-                    CategoryChip(
-                        category = category,
-                        selected = category.id == state.selectedCategoryId,
-                        onClick = { onSelectCategory(category.id) },
-                    )
-                }
-                // The twelve quick categories are what the grid shows, not what a monthly
-                // plan is limited to: rent, tuition and insurance are recurring precisely
-                // because they are not everyday spending, so they are exactly the ones the
-                // quick set leaves out. The full tree is one tap away, same dialog as the
-                // expense grid's 「更多」.
-                if (state.categoryGroups.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .clickable { moreOpen = true }
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                    ) {
-                        Text(
-                            text = "更多",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
+                Text(
+                    text = state.selectedCategoryName ?: "不指定",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Start,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "▾",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -651,6 +707,10 @@ private fun MonthlyPanel(
             groups = state.categoryGroups,
             selectedId = state.selectedCategoryId,
             onSelect = onSelectCategory,
+            // A monthly plan may legitimately have no category -- nothing requires the
+            // plan to be classified -- so this picker is the one place that offers a way
+            // back to "none".
+            onClear = onClearCategory,
             onDismiss = { moreOpen = false },
         )
     }

@@ -149,8 +149,12 @@ private val SETTINGS_SUB_ROUTES = setOf(
  *
  * The entry, edit and detail screens take the whole window and hide the bar, so their
  * mapping only matters while a transition is still running.
+ *
+ * `internal` rather than private so the mapping is covered by unit tests: it decides which
+ * tab stays lit, and getting it wrong is invisible until someone notices the dock has gone
+ * dark on a sub-page.
  */
-private fun owningTab(route: String?): String? = when {
+internal fun owningTab(route: String?): String? = when {
     route == null -> null
     route == Routes.LEDGER -> Routes.LEDGER
     route == Routes.STATS -> Routes.STATS
@@ -180,8 +184,11 @@ private fun tabIndexOf(route: String?): Int {
  * map to that tab, so 设置 → 关于 → 功能介绍 compared equal and slid in from the *left* --
  * the one direction a deeper screen must never come from. Depth is what decides inside a
  * tab, and dock position is what decides between tabs.
+ *
+ * `internal` so the rule is unit-tested; the animation is 150ms, which is far too short to
+ * catch and check by eye on a device.
  */
-private fun isForward(from: String?, to: String?): Boolean {
+internal fun isForward(from: String?, to: String?): Boolean {
     val toIsTab = TABS.any { it.route == to }
     val fromIsTab = TABS.any { it.route == from }
     return when {

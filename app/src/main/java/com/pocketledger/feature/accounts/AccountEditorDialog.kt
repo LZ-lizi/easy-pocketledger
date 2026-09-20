@@ -111,141 +111,147 @@ fun AccountEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "添加账户" else "编辑账户") },
         text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("名称") },
-                )
-
-                Text(
-                    text = "类型",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(Modifier.heightIn(max = 460.dp)) {
+                // The fields scroll; the destructive action below does not. As the
+                // last item *inside* the scrolling column, 「删除」 sat half below the
+                // fold on a real phone -- a cut-off red outline with no label, which
+                // reads as a rendering defect and hides the action entirely.
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    ACCOUNT_TYPES.forEach { (value, label) ->
-                        SelectChip(
-                            label = label,
-                            selected = type == value,
-                            onClick = { type = value },
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = balanceText,
-                    onValueChange = {
-                        balanceText = it
-                        balanceEdited = it != Money.formatCompact(shownBalance)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    prefix = { Text("¥") },
-                    label = { Text("余额") },
-                    supportingText = {
-                        Text(
-                            text = if (existing == null) {
-                                "记账从这里开始累加。"
-                            } else {
-                                "改了就按新余额继续记账，之前的流水不会变。"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    },
-                    isError = !balanceValid,
-                )
-
-                QuickAmountRow { delta ->
-                    val current = Money.parseYuanToCents(balanceText) ?: 0L
-                    val next = Money.formatCompact(current + delta)
-                    balanceText = next
-                    balanceEdited = next != Money.formatCompact(shownBalance)
-                }
-
-                if (isCreditCard) {
                     OutlinedTextField(
-                        value = creditLimit,
-                        onValueChange = { creditLimit = it },
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("名称") },
+                    )
+
+                    Text(
+                        text = "类型",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ACCOUNT_TYPES.forEach { (value, label) ->
+                            SelectChip(
+                                label = label,
+                                selected = type == value,
+                                onClick = { type = value },
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = balanceText,
+                        onValueChange = {
+                            balanceText = it
+                            balanceEdited = it != Money.formatCompact(shownBalance)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         prefix = { Text("¥") },
-                        label = { Text("额度（可留空）") },
+                        label = { Text("余额") },
+                        supportingText = {
+                            Text(
+                                text = if (existing == null) {
+                                    "记账从这里开始累加。"
+                                } else {
+                                    "改了就按新余额继续记账，之前的流水不会变。"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        },
+                        isError = !balanceValid,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            value = billDay,
-                            onValueChange = { billDay = it.filter(Char::isDigit).take(2) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text("账单日") },
-                        )
-                        OutlinedTextField(
-                            value = repayDay,
-                            onValueChange = { repayDay = it.filter(Char::isDigit).take(2) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text("还款日") },
-                        )
-                    }
-                }
 
-                Text(
-                    text = "颜色",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ACCOUNT_COLORS.forEach { candidate ->
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(Color(candidate))
-                                .clickable { colorArgb = candidate },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (candidate == colorArgb) {
-                                Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                )
+                    QuickAmountRow { delta ->
+                        val current = Money.parseYuanToCents(balanceText) ?: 0L
+                        val next = Money.formatCompact(current + delta)
+                        balanceText = next
+                        balanceEdited = next != Money.formatCompact(shownBalance)
+                    }
+
+                    if (isCreditCard) {
+                        OutlinedTextField(
+                            value = creditLimit,
+                            onValueChange = { creditLimit = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            prefix = { Text("¥") },
+                            label = { Text("额度（可留空）") },
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(
+                                value = billDay,
+                                onValueChange = { billDay = it.filter(Char::isDigit).take(2) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                label = { Text("账单日") },
+                            )
+                            OutlinedTextField(
+                                value = repayDay,
+                                onValueChange = { repayDay = it.filter(Char::isDigit).take(2) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                label = { Text("还款日") },
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "颜色",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ACCOUNT_COLORS.forEach { candidate ->
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(candidate))
+                                    .clickable { colorArgb = candidate },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (candidate == colorArgb) {
+                                    Box(
+                                        Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = "计入总资产",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = "注销的卡可以关掉，流水仍保留。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "计入总资产",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "注销的卡可以关掉，流水仍保留。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = includeInTotal, onCheckedChange = { includeInTotal = it })
                     }
-                    Switch(checked = includeInTotal, onCheckedChange = { includeInTotal = it })
-                }
 
+                }
                 if (existing != null && onDelete != null) {
                     Spacer(Modifier.height(4.dp))
                     DestructiveOutlinedButton(

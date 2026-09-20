@@ -111,8 +111,15 @@ fun TermSettingsScreen(
 
         if (state.terms.isEmpty()) {
             item(key = "empty") {
+                // Names the ledger, because terms belong to one: the same page on another
+                // ledger is legitimately empty, and an unnamed empty list reads as data
+                // that was lost rather than as a book that never had any.
                 Text(
-                    text = "还没有学期，点右上角「添加」建一个",
+                    text = if (state.ledgerName.isBlank()) {
+                        "还没有学期，点右上角「添加」建一个"
+                    } else {
+                        "【${state.ledgerName}】还没有学期，点右上角「添加」建一个。学期是按账本分开的。"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp),
@@ -215,36 +222,40 @@ private fun TermEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "添加学期" else "编辑学期") },
         text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("名称") },
-                )
+            Column(Modifier.heightIn(max = 420.dp)) {
+                // Same footer rule as the other editors: a destructive action must not
+                // be the thing that falls off the bottom of a scrolling dialog.
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("名称") },
+                    )
 
-                DateField(
-                    label = "开始日期",
-                    dateKey = startKey,
-                    onPick = { startKey = it },
-                )
-                QuickChip("今天开始") { startKey = today.toString() }
+                    DateField(
+                        label = "开始日期",
+                        dateKey = startKey,
+                        onPick = { startKey = it },
+                    )
+                    QuickChip("今天开始") { startKey = today.toString() }
 
-                DateField(
-                    label = "结束日期",
-                    dateKey = endKey,
-                    onPick = { endKey = it },
-                    isError = !rangeValid,
-                    errorText = if (!rangeValid) "结束日期不能早于开始日期" else null,
-                )
-                QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
+                    DateField(
+                        label = "结束日期",
+                        dateKey = endKey,
+                        onPick = { endKey = it },
+                        isError = !rangeValid,
+                        errorText = if (!rangeValid) "结束日期不能早于开始日期" else null,
+                    )
+                    QuickChip("默认 4 个月后") { endKey = TermSettingsViewModel.defaultEndDate(today) }
 
+                }
                 if (existing != null) {
                     DestructiveOutlinedButton(
                         label = "删除这个学期",

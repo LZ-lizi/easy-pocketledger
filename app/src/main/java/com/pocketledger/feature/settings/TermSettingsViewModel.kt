@@ -29,6 +29,15 @@ data class TermSettingsUiState(
     val editorTarget: TermEntity? = null,
     /** Pre-filled name for a new term, e.g. 「2026 秋季学期」. */
     val suggestedName: String = "",
+    /**
+     * The ledger these terms belong to.
+     *
+     * Shown in the empty state because terms are **per ledger**, and an empty list on a
+     * ledger that never had one is indistinguishable from having lost them. That
+     * ambiguity is exactly how it was reported: "updating the app lost my 学期 data",
+     * when the list was simply being looked at from another ledger.
+     */
+    val ledgerName: String = "",
 )
 
 private data class EditorState(val target: TermEntity?)
@@ -47,12 +56,14 @@ class TermSettingsViewModel(private val repository: LedgerRepository) : ViewMode
     val uiState: StateFlow<TermSettingsUiState> = combine(
         repository.observeTerms(),
         editor,
-    ) { terms, editorState ->
+        repository.observeSelectedLedger(),
+    ) { terms, editorState, ledger ->
         TermSettingsUiState(
             terms = terms.map { TermRow(it, dayCount(it)) },
             editorVisible = editorState != null,
             editorTarget = editorState?.target,
             suggestedName = suggestedTermName(LocalDate.now()),
+            ledgerName = ledger?.name.orEmpty(),
         )
     }.stateIn(
         scope = viewModelScope,
