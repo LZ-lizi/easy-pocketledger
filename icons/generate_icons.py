@@ -1,18 +1,23 @@
-"""Emit the app's icon set as SVG.
+"""The original procedural icon set, kept as a reference.
 
-The icons in `LedgerIcon.kt` are drawn procedurally with Compose `DrawScope`, so there
-are no vector files to copy -- this script is the transcription. Every coordinate below
-is the same fraction of the canvas side that the Kotlin uses, so the two can be diffed by
-eye; the only change of units is the multiply by `SIDE` (the SVG viewBox is 100 x 100).
+This was the source of the whole set until the icons were redrawn by hand. `svg/` is now
+**hand-made artwork and is never written by a script** -- this one included -- so its output
+goes to `drawn/` instead, which nothing else reads. Running it is how you compare the old
+geometry with what the set actually ships; it can no longer overwrite anything that matters.
 
-Two entries are the exception: **微信支付 and 支付宝 are real brand marks**, taken from the
-PNGs in `source/` and traced by `trace_logos.py` into `logos.json`. Hand-fitting a path for
-a logo would be a guess at someone else's artwork, so the outline is measured rather than
-drawn. This script only places the result on the same canvas; the geometry lives in that
-file, and regenerating it means re-running the tracer over the sources.
+The rest of the pipeline is:
+
+    svg/  (hand-made)  ->  normalize_icons.py  ->  normalized/  ->  make_drawables.py
+                                                                   ->  res/drawable/
+
+Two entries here are the exception to "drawn": **微信支付 and 支付宝 are real brand marks**,
+taken from the PNGs in `source/` and traced by `trace_logos.py` into `logos.json`.
+Hand-fitting a path for a logo would be a guess at someone else's artwork, so the outline is
+measured rather than drawn; this script only places the result on the same canvas, and
+regenerating it means re-running the tracer over the sources.
 
 Run:  python generate_icons.py
-Writes svg/*.svg, index.html and MANIFEST.md next to this file.
+Writes drawn/*.svg, index.html and MANIFEST.md next to this file.
 """
 import json
 import math
@@ -20,7 +25,7 @@ import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SVG_DIR = os.path.join(HERE, "svg")
+SVG_DIR = os.path.join(HERE, "drawn")
 LOGOS_PATH = os.path.join(HERE, "logos.json")
 
 SIDE = 100.0
@@ -540,7 +545,7 @@ def main():
 </div>
 </html>
 """
-    with open(os.path.join(HERE, "index.html"), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(SVG_DIR, "index.html"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(html)
 
     # ---- generated manifest
@@ -577,7 +582,7 @@ def main():
     for enum_name, key in TRACED.items():
         lines.append(f"- `svg/{file_name(enum_name)}.svg`（`{enum_name}`）：{logo_note(key)}")
     lines.append("")
-    with open(os.path.join(HERE, "MANIFEST.md"), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(SVG_DIR, "MANIFEST.md"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
 
     print(f"wrote {len(written)} ui icons + 3 launcher icons to {SVG_DIR}")

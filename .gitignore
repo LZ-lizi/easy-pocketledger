@@ -36,3 +36,13 @@ Thumbs.db
 
 # Device screenshots taken while verifying: they show real merchants and amounts
 /.shots/
+
+# Icon pipeline scratch: contact sheets, comparisons, probe renders
+/icons/_work/
+# Local safety copy of the hand-made artwork
+/icons/user-backup/
+
+# Reference output of the retired procedural generator
+/icons/drawn/
+__pycache__/
+*.pyc

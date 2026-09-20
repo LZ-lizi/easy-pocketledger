@@ -6,58 +6,99 @@ App 里用到的**全部图标**，既是可独立使用的 SVG，也是 App 真
 
 以前界面图标是用 Compose `DrawScope` 手绘的（`ui/components/LedgerIcon.kt`，495 行绘图代码），
 选它是因为 `material-icons-extended` 会带来 3 MB 依赖并把版本绑死在 Compose 上。
-**从 v0.8.4 起改成矢量资源**：`icons/generate_icons.py` 里的几何同时产出
+**从 v0.8.4 起改成矢量资源。**
 
-1. `icons/svg/*.svg` —— 本目录的导出件（看效果用），
-2. `app/src/main/res/drawable/ic_ledger_*.xml` —— App 实际加载的 VectorDrawable，
-   由 `icons/make_drawables.py` 从 (1) 转换而来，**路径数据逐字搬运**。
+**`svg/` 是手绘原稿，任何脚本都不会写它。** 从 v0.8.5 起管线是：
 
-也就是说：**这里就是唯一几何来源**。改图形改 `generate_icons.py`，然后跑两个脚本，
-App 与预览页同时更新，两边不可能不一致。`LedgerIcon.kt` 现在只剩枚举、`iconKey` 映射
-和一个 `when` 表达式（枚举 → 资源 id）—— 用表达式是为了让「加了枚举却没给文件」直接编译失败。
+```
+icons/svg/            手绘原稿（人改这里，脚本只读）
+      │  normalize_icons.py   统一尺寸与粗细
+      ▼
+icons/normalized/     规范化后的 100×100 SVG
+      │  make_drawables.py    逐字搬运 pathData
+      ▼
+app/src/main/res/drawable/ic_ledger_*.xml
+```
+
+`LedgerIcon.kt` 现在只剩枚举、`forKey` 映射和一个 `when` 表达式（枚举 → 资源 id）——
+用表达式是为了让「加了枚举却没给文件」直接编译失败。
 
 **两个图标是真实品牌标识**（微信支付、支付宝），不能用"照抄一段绘图代码"的方式得到，
 所以是从 PNG **描摹**出来的（见下）。
+
+`generate_icons.py` 是**最初那套程序化几何**的留存，输出改到 `icons/drawn/`，只用于对照，
+不再参与管线 —— 它过去会重写整个 `svg/` 目录，覆盖掉手改的图标，所以被移开了。
 
 ## 目录
 
 ```
 icons/
-├── svg/                     34 个 SVG（几何的可读形态）
-│   ├── list.svg … tag.svg   31 个界面图标（与 LedgerIcon 枚举一一对应）
+├── svg/                     手绘原稿，35 个 SVG（脚本只读，永不覆写）
+│   ├── list.svg … tag.svg   32 个界面图标
 │   ├── launcher.svg         启动图标合成预览
 │   ├── launcher-background.svg
 │   └── launcher-foreground.svg
+├── normalized/              规范化后的 32 个 UI 图标（管线的实际产物）
 ├── source/                  两个品牌标识的原始 PNG（描摹的输入）
 ├── logos.json               描摹结果：归一化后的轮廓点（由 trace_logos.py 生成）
+├── normalize_icons.py       统一尺寸与粗细（svg/ → normalized/）
 ├── trace_logos.py           PNG → 轮廓的描摹器
-├── generate_icons.py        几何定义 + 统一尺寸 + 产出 SVG
-├── make_drawables.py        SVG → app/src/main/res/drawable/ic_ledger_*.xml
-├── index.html               图标一览页（浏览器打开即可）
+├── make_drawables.py        normalized/ → app/src/main/res/drawable/ic_ledger_*.xml
+├── generate_icons.py        最初的程序化几何，输出到 drawn/，仅供对照
+├── index.html               图标一览页（浏览器打开即可，含 24/32/40 像素小样）
 ├── preview.png              上面那页的截图，不想开浏览器就看这个
-└── MANIFEST.md              图标 ↔ 枚举 ↔ iconKey ↔ 实际长边（自动生成）
+└── _work/                   规范化过程的中间产物（接触表、对比图，已 gitignore）
 ```
 
 ## 看图
 
 - 直接打开 `preview.png`，或
-- 用浏览器打开 `index.html`：每个图标给出**浅色与深色两种背景**下的效果。
-  每张卡片下面还标了该图标的实际着色长边（见下）。
+- 用浏览器打开 `index.html`：每个图标给出 72 像素大图和 24 / 32 / 40 像素小样，
+  用来确认缩小到实际显示尺寸后线条依然清楚。
 
-## 统一尺寸：收紧散布，不是拉成一样大
+## 统一尺寸与粗细
 
-每个图标按**实际着色范围**（含描边宽度的一半）测量，长边超出 `[64, 84]` 的按比例缩放
-到边界、其余只做居中。实测原本是 **52.0 – 88.5**，其中校园卡 88.5 几乎顶到画布边缘；
-现在全部落在带内，**20 个图标一个像素没动**。
+原稿是从好几个来源凑起来的：24×24 的图标库、32×32 的电话、50×50 和 512×512 的
+Illustrator 导出、以及 100×100 的旧绘图。每个文件都撑在自己的画布上，所以**画得一样大
+的路径，实际着色范围差到 1.44 倍**（在 320 像素的格子里量，长边 204 – 294）。
+先把这个修掉，再修由它带来的第二个问题。
 
-为什么不统一到一个数：缩放会**连描边一起缩放**，一只 56.5 单位的右箭头（本来就该小、
-就坐在列表行里）拉到 84 之后比旁边的银行卡还重。要修的是离群，不是差异。
-`MANIFEST.md` 里每个图标都标了实际长边。
+| | 原稿 | 规范化后 |
+| --- | --- | --- |
+| 墨迹长边（同一格子，单位 = 格子/100） | 64.0 – 92.0 | **76 – 81**（目标 78） |
+| 线条视觉粗细 | 5.9 – 23.7 | **7.9 – 9.0**（描边类），实心块另计 |
+
+**尺寸**：量的是**实际着色的墨迹**（不是路径坐标），把长边缩放到 **78/100**，再居中。
+`normalize_icons.py` 会把这个数字印出来。
+
+**粗细**：统一尺寸本身会改变粗细 —— 缩放图纸会连线条一起缩放，原本只占了画布一小块的
+图标就会被放大成"粗线"。所以缩放之后要把笔重新发一遍，基准线宽回到 **8.5/100**。
+两条路线，取决于粗细藏在哪儿：
+
+- **`vector`（默认）**：图形由描边路径构成时，重写 `stroke-width` 即可，中心线一个点都不动，
+  端头和圆弧原样保留。同时，对"整体是一块实心"的图标（银行、微信气泡、三个点、人物头像）
+  也走这条：实心块没有"线宽"可调，往里收只会把形状吃掉。
+  - 一条路径本身是描边、但只是 **0.5 单位头发丝细节**（比如钞票图标上的 ¥）时不重写笔宽，
+    否则那条细节会被放大 17 倍糊成一块。判据是：最粗的描边至少占图形墨迹的 40%。
+- **`mask`**：图形由**填充轮廓**构成时，线宽已经焊死在形状里。这类图标只有在
+  **比目标细**、或**比目标粗且不含实心块**时，才从自身 700 像素位图重新描一遍：
+  把轮廓整体**向外推**或**向内收**线宽差值的一半，中心线不动，形状其他部分不动。
+  - 向外推永远安全，上限 1.6/100；向内收可能吃掉细节，上限 1.0/100。
+  - 整块实心（墨迹离边缘比任何线条都远）的图标**不允许内收**，否则那是改形状不是改粗细。
+
+**保真度**：走 `mask` 路线的是 `alipay cash comms ellipsis fun gift hospital other pet wallet`
+共 10 个。把重新描摹的结果和它本该是的那个位图各自按墨迹外框归一化后对比，
+**IoU 0.987 – 0.994，逐像素差异 0.10% – 0.77%**（见 `_work/verify_masks.py`）。
+走 `vector` 路线的图标是仿射变换 + 重发笔宽，中心线在数学上完全没动。
+
+**为什么不做成"全都一样粗"**：实心块（银行 16.5、微信 22.7、人物头像）和本身就是粗块的
+图形（三个点 11.8、设置页的圆点）没有线宽这个自由量；把它们削到 8.5 是在改形状。
+描边类图标最终落在 **7.9 – 9.0**，同一族里已看不出差别。
 
 ## 两个品牌标识（描摹，不是手绘）
 
 `svg/wechat.svg`（微信支付）和 `svg/alipay.svg`（支付宝）来自 `source/` 里的 PNG，
-由 `trace_logos.py` 描摹成 SVG：
+由 `trace_logos.py` 描摹而成。
 
 | 文件 | 来源 | 描摹结果 |
 | --- | --- | --- |
@@ -66,75 +107,57 @@ icons/
 
 和其余图标的三点不同：
 
-1. **是填充路径，不是描边**：`stroke="none" fill="#000000"`。其余图标是"中心线 + 8.5 描边"。
+1. **是填充路径，不是描边**：`stroke="none" fill="#000000"`。
 2. **挖空用 `fill-rule="evenodd"`**：微信气泡里的对勾、支付宝「支」字内部那圈封闭空间，
    在源文件里是透明的，靠 evenodd 变成洞；否则会被填死。
 3. **无背景**：源文件本身就是透明底，SVG 里也没有任何背景矩形，可以直接叠在任意底色上用。
-
-**尺寸**：把所有轮廓的最长边缩放到 **80 单位**并居中（画布仍是 100×100）。
-不是照着其余图标实测的 ~84.5 单位 ink 盒子对齐 —— 描边是以中心线为准向两侧各溢出约 4 单位，
-而这几个是实心块；若也做到 84.5，视觉上会比任何其他图标都重。80 才是那些描边图标"被画进"
-的盒子，是更诚实的视觉等重。
-
-**保真度**：把 SVG 和源 PNG 都按 ink 外框归一化后栅格化对比，
-微信 IoU ≈ 0.989、支付宝 IoU ≈ 0.977，实心面积差约 0.5%（也就是边缘位置差在零点几个像素，
-远小于图标实际显示尺寸）。**无背景、形状不失真、边框位置没有整体偏移**是这三项各自量过的。
-
-**重新描摹**：
-
-```powershell
-python icons/trace_logos.py      # 读 source/*.png → 重写 logos.json
-python icons/generate_icons.py   # 读 logos.json → 重写 svg/wechat.svg、svg/alipay.svg
-```
 
 描摹流程（覆盖率 → 必要时的双线性放大 → marching squares 取半覆盖等值线 →
 Douglas-Peucker 抽稀 → 归一化）写在 `trace_logos.py` 的文档注释里，包括
 "为什么放大用双线性而不是 Lanczos"（Lanczos 在硬边上过冲，会把等值线整体推出去约 1%）。
 
-
 ## 格式约定
 
 | 项 | 取值 |
 | --- | --- |
-| 画布 | 界面图标 `viewBox="0 0 100 100"`；启动图标 `0 0 108 108` |
-| 坐标 | 原绘图代码里"画布边长的几分之几" × 100，所以 `0.22` → `22` |
-| 描边 | 常规 `stroke-width="8.5"`，细线 `6.5`；统一尺寸时按同一比例缩放 |
+| 画布 | `normalized/` 与界面图标一律 `viewBox="0 0 100 100"`；启动图标 `0 0 108 108` |
+| 墨迹长边 | 78/100 |
+| 基准线宽 | 8.5/100，细线按同一比例缩放 |
 | 端头/拐角 | 全部 `round`（VectorDrawable 里写在每条 path 上，它不继承根节点） |
 | 颜色 | 统一 `#000000`，只是占位 |
-| 例外 | `wechat.svg` / `alipay.svg` 是实心填充 + `fill-rule="evenodd"`（见上） |
-| 摆放 | 长边超出 `[64, 84]` 的图标套一层 `<g transform>` / `<group>` 缩放居中 |
+| 摆放 | 缩放到位后套一层 `<g transform="translate(a,b) scale(s)">`；可为嵌套 |
+| 实心图标 | 单条 `<path fill-rule="evenodd">`，一个 path 装下所有轮廓 |
 
 **关于颜色**：App 在运行时给图标着色（同一个图标要能用类别色、主题色渲染），
 所以源文件里的黑色没有语义；资源文件里也是黑色，靠 `Icon(tint = …)` 覆盖。
-要在别处改色，两种办法：
-
-- 把 `generate_icons.py` 里的 `INK = "#000000"` 改成目标色后重新生成；
-- 或把生成文件里的 `stroke="#000000"` / `fill="#000000"` 换成 `currentColor`，
-  即可跟随 CSS 的 `color`（部分设计软件不认识 `currentColor`，所以默认没有用它）。
 
 ## 重新生成
 
 ```powershell
-python icons/generate_icons.py     # 几何 → svg/ + index.html + MANIFEST.md
-python icons/make_drawables.py     # svg/  → app/src/main/res/drawable/ic_ledger_*.xml
+python icons/normalize_icons.py    # svg/ → normalized/ + preview.png + index.html
+python icons/make_drawables.py     # normalized/ → app/src/main/res/drawable/ic_ledger_*.xml
 ```
 
-两条都要跑，App 才会跟着变。品牌标识的几何来自 `logos.json`，
-只有重新描摹时才需要先跑 `trace_logos.py`（读 `source/*.png`）。`preview.png` 手动重截：
+两条都要跑，App 才会跟着变。`normalize_icons.py --dry-run` 只测量并打印
+每个图标走哪条路线、缩放多少、最终粗细是多少，不写任何文件。
+
+自查用：
 
 ```powershell
-chrome --headless=new --disable-gpu --hide-scrollbars --window-size=1200,1500 `
-  --screenshot=icons/preview.png "file:///<绝对路径>/icons/index.html"
+python icons/_work/compare.py 400       # 左：svg/ 原稿，右：normalized/，并给出重合度
+python icons/_work/verify_masks.py      # 重描的那 10 个是否忠实
 ```
+
+品牌标识的几何来自 `logos.json`，只有重新描摹时才需要先跑 `trace_logos.py`
+（读 `source/*.png`），它已经并入 `logos.json`，再由 `normalize_icons.py` 统一处理。
 
 ## 与代码的对应关系
 
 - 枚举名 → 文件名：`CHEVRON_RIGHT` → `chevron-right.svg`（下划线转连字符，全小写）；
   → 资源名：`ic_ledger_chevron_right`（连字符转下划线，资源名不允许连字符）。
-- `LedgerIcon.forKey()` 把数据库里的 `iconKey` 映射到枚举，完整对照见 `MANIFEST.md`。
+- `LedgerIcon.forKey()` 把数据库里的 `iconKey` 映射到枚举。
   例如类别 `餐饮` 存的是 `food`，对应 `svg/food.svg` 与 `ic_ledger_food.xml`。
 - 启动图标同时存在于 `app/src/main/res/drawable/ic_launcher_*.xml`（Android VectorDrawable，
   手写而非生成）。这里额外转成 SVG 并加了合成图，是为了让整个文件夹只用一种格式。
 - 两个品牌标识与 `LedgerIcon.WECHAT` / `.ALIPAY` 对应（`iconKey` 为 `wechat` / `alipay`）：
-  它们在 App 里就是这里描摹出来的那两条填充路径（`fillType="evenOdd"`），
-  不再是以前的手绘近似图形。
+  它们在 App 里就是这里描摹出来的那两条填充路径（`fillType="evenOdd"`）。
