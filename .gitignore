@@ -10,8 +10,12 @@ gen/
 out/
 release/
 
+# Release APKs kept locally; the published ones live on the Releases page
+/dist/
+
 # Gradle
 .gradle/
+.kotlin/
 local.properties
 gradle-app.setting
 .gradletasknamecache
@@ -41,15 +45,14 @@ Thumbs.db
 /icons/_work/
 # Local safety copy of the hand-made artwork
 /icons/user-backup/
-
 # Reference output of the retired procedural generator
 /icons/drawn/
+
+# Python scratch
 __pycache__/
 *.pyc
-
-# Scratch renders from the copy extractor
 /tools/_*
 
-
-# Local scratch from the copy round trip
-/tools/_*
+# Internal working documents: kept locally, never published
+/PLAN.md
+/PROGRESS.md

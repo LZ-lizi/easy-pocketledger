@@ -1,0 +1,13 @@
+# Normalise line endings: LF in the repository, native in the working tree.
+* text=auto
+
+# Windows and Unix shell scripts each need their own ending to run.
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# Binary assets: never diff, never re-encode.
+*.png binary
+*.jpg binary
+*.jar binary
+*.apk binary
+*.xlsx binary
