@@ -40,6 +40,7 @@ import com.pocketledger.data.dao.TxnRow
 import com.pocketledger.data.entity.TxnType
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.CalendarPickerDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.theme.LedgerTheme
@@ -372,13 +373,10 @@ private fun DateChip(label: String, set: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun ClearChip(onClick: () -> Unit) {
-    Text(
-        text = "清除",
-        style = MaterialTheme.typography.labelMedium,
-        color = LedgerTheme.colors.expense,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+    DestructiveOutlinedButton(
+        label = "清除",
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
     )
 }
 

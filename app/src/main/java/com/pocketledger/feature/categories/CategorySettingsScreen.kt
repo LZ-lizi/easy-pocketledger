@@ -268,13 +268,11 @@ private fun GroupHeader(
                     .clickable(onClick = onAddChild)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             )
-            Text(
-                text = "删除",
-                style = MaterialTheme.typography.labelMedium,
-                color = LedgerTheme.colors.expense,
-                modifier = Modifier
-                    .clickable(onClick = onDelete)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            Spacer(Modifier.width(4.dp))
+            DestructiveOutlinedButton(
+                label = "删除",
+                onClick = onDelete,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             )
         }
     }

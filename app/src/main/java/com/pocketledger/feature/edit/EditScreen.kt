@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,7 @@ import com.pocketledger.domain.DateKeys
 import com.pocketledger.domain.Money
 import com.pocketledger.ui.components.CalendarPickerDialog
 import com.pocketledger.ui.components.ConfirmDeleteDialog
+import com.pocketledger.ui.components.DestructiveOutlinedButton
 import com.pocketledger.ui.components.LedgerIcon
 import com.pocketledger.ui.components.LedgerIconView
 import com.pocketledger.ui.components.WheelTimePickerDialog
@@ -283,13 +285,10 @@ private fun EditHeader(
         )
         Spacer(Modifier.weight(1f))
         if (loaded && !missing && canDelete) {
-            Text(
-                text = "删除",
-                style = MaterialTheme.typography.labelLarge,
-                color = LedgerTheme.colors.expense,
-                modifier = Modifier
-                    .clickable(onClick = onDelete)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            DestructiveOutlinedButton(
+                label = "删除",
+                onClick = onDelete,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             )
         }
     }
