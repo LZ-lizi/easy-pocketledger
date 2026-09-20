@@ -47,6 +47,7 @@ icons/
 ├── generate_icons.py        最初的程序化几何，输出到 drawn/，仅供对照
 ├── index.html               图标一览页（浏览器打开即可，含 24/32/40 像素小样）
 ├── preview.png              上面那页的截图，不想开浏览器就看这个
+├── preview-compare.png      左＝svg/ 原稿，右＝normalized/，改了什么一眼可见
 └── _work/                   规范化过程的中间产物（接触表、对比图，已 gitignore）
 ```
 
