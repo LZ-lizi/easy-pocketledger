@@ -5,20 +5,29 @@ are no vector files to copy -- this script is the transcription. Every coordinat
 is the same fraction of the canvas side that the Kotlin uses, so the two can be diffed by
 eye; the only change of units is the multiply by `SIDE` (the SVG viewBox is 100 x 100).
 
+Two entries are the exception: **微信支付 and 支付宝 are real brand marks**, taken from the
+PNGs in `source/` and traced by `trace_logos.py` into `logos.json`. Hand-fitting a path for
+a logo would be a guess at someone else's artwork, so the outline is measured rather than
+drawn. This script only places the result on the same canvas; the geometry lives in that
+file, and regenerating it means re-running the tracer over the sources.
+
 Run:  python generate_icons.py
 Writes svg/*.svg, index.html and MANIFEST.md next to this file.
 """
+import json
 import math
 import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SVG_DIR = os.path.join(HERE, "svg")
+LOGOS_PATH = os.path.join(HERE, "logos.json")
 
 SIDE = 100.0
 STROKE = 0.085          # Kotlin: w * 0.085f
 THIN = 0.065            # Kotlin: w * 0.065f
 INK = "#000000"         # placeholder; the app tints at runtime
+TARGET = 80.0           # box a traced brand mark's longer side is scaled into
 
 # ----------------------------------------------------------------- primitives
 
@@ -79,6 +88,38 @@ def poly(points, *, closed=False, filled=False, width=STROKE):
     if filled:
         return f'<path d="{d}" stroke="none" fill="{INK}"/>'
     return f'<path d="{d}" stroke-width="{n(width)}"/>'
+
+
+_LOGOS = None
+
+
+def logo(name):
+    """A brand mark traced from a PNG; see `trace_logos.py`.
+
+    `fill-rule="evenodd"` is what makes the knocked-out parts of a logo -- the check inside
+    the WeChat bubble, the counter inside 支 -- come out as holes instead of being filled
+    in. Both attributes are set explicitly because the document wrapper sets `fill="none"`
+    and a stroke colour for the drawn icons, and neither applies here.
+    """
+    global _LOGOS
+    if _LOGOS is None:
+        with open(LOGOS_PATH, encoding="utf-8") as fh:
+            _LOGOS = json.load(fh)
+    entry = _LOGOS[name]
+    return (
+        f'<path d="{entry["path"]}" stroke="none" fill="{INK}" '
+        f'fill-rule="evenodd"/>'
+    )
+
+
+def logo_note(name):
+    """One line about where a traced mark came from, for the manifest."""
+    if _LOGOS is None:
+        logo(name)
+    entry = _LOGOS[name]
+    return (f'由 `{entry["source"]}`（{entry["sourceSize"][0]}×{entry["sourceSize"][1]}）'
+            f'描摹，{entry["contours"]} 条轮廓 / {entry["points"]} 点，'
+            f'长边缩放至 {int(TARGET)} 单位')
 
 
 # --------------------------------------------------------------------- icons
@@ -225,16 +266,10 @@ ICONS = [
         line(0.14, 0.80, 0.86, 0.80, STROKE),
     ]),
     ("ALIPAY", ["alipay"], [
-        rect(0.12, 0.28, 0.76, 0.44, 0.10),
-        line(0.36, 0.42, 0.64, 0.42, THIN),
-        line(0.50, 0.42, 0.50, 0.60, THIN),
-        line(0.34, 0.58, 0.66, 0.58, THIN),
+        logo("alipay"),
     ]),
     ("WECHAT", ["wechat"], [
-        rect(0.10, 0.22, 0.56, 0.42, 0.14),
-        rect(0.36, 0.42, 0.54, 0.38, 0.14),
-        dot(0.28, 0.43, 0.045),
-        dot(0.48, 0.43, 0.045),
+        logo("wechat"),
     ]),
 
     # ---- Fallback
@@ -258,6 +293,9 @@ SECTION_OF = {
     "BANK": "收入与账户", "ALIPAY": "收入与账户", "WECHAT": "收入与账户",
     "TAG": "兜底",
 }
+
+# The two entries whose path is traced from a real brand mark rather than drawn.
+TRACED = {"ALIPAY": "alipay", "WECHAT": "wechat"}
 
 # The launcher icon is already an Android vector; transcribed here so the folder holds
 # the complete set in one format. Its canvas is 108 x 108, not the icons' 100 x 100.
@@ -397,7 +435,16 @@ def main():
         "| `svg/launcher-foreground.svg` | — | — | 启动图标 |",
         "| `svg/launcher.svg` | — | — | 启动图标（合成） |",
         "",
+        "## 两个品牌标识不是手绘的",
+        "",
+        "其余图标都是从 `LedgerIcon.kt` 的绘图代码转写的（描边 + 坐标 = 画布边长的比例），",
+        "下面两个是真实品牌标识，描摹自 `source/` 里的 PNG，因此是**填充路径**而非描边，",
+        "多出来的部分（微信气泡里的对勾、支付宝「支」字内部的封闭空间）用 `fill-rule=\"evenodd\"` 挖空。",
+        "",
     ]
+    for enum_name, key in TRACED.items():
+        lines.append(f"- `svg/{file_name(enum_name)}.svg`（`{enum_name}`）：{logo_note(key)}")
+    lines.append("")
     with open(os.path.join(HERE, "MANIFEST.md"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
 
