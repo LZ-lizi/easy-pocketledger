@@ -2,7 +2,7 @@
 
 随心记账是使用 DeepSeek 开发的一款开源记账软件，解决市面上大部分记账软件均需要会员才可解锁全部功能的痛点，主要面向于大学生计算生活费的使用场景，有助于防止头脑一热花完一个月生活费的情况。
 
-> 应用显示名称、README 与仓库名统一为「随心记账」（`easy-pocketledger`）；代码里的包名与目录仍是 `pocketledger`。
+
 
 #### **应用介绍**
 
@@ -55,21 +55,6 @@
 如果使用中发现任何 bug 或有合适的意见，尽情发送 issues，助力软件逐渐成熟完整。
 
 ---
-
-### 自己编译
-
-需要 JDK 21 与 Android SDK（compileSdk 37）。仓库自带 Gradle wrapper，但国内网络下 `services.gradle.org` 经常连不上，
-`settings.gradle.kts` 已经把阿里云镜像排在前面。
-
-```bash
-git clone <本仓库地址>
-cd pocketledger
-echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
-./gradlew assembleDebug          # 产物在 app/build/outputs/apk/debug/
-./gradlew testDebugUnitTest      # 207 个单元测试
-```
-
-`local.properties` 已在 `.gitignore` 里，不会进仓库。
 
 ### 技术栈
 
