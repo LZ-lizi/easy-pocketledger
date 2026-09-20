@@ -218,8 +218,8 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
             val outcome = runCatching {
                 withContext(Dispatchers.IO) {
                     container.backupService.restore(file, container.schemaVersion)
+                    container.afterRestore()
                 }
-                container.afterRestore()
             }
             _uiState.update {
                 it.copy(
