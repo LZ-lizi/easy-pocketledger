@@ -1,6 +1,7 @@
 package com.pocketledger.di
 
 import android.content.Context
+import com.pocketledger.R
 import com.pocketledger.data.BudgetAlertChecker
 import com.pocketledger.data.DataRepair
 import com.pocketledger.data.InstallmentRunner
@@ -42,6 +43,14 @@ class AppContainer(context: Context) {
             appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
         }.getOrNull().orEmpty()
     }
+
+    /**
+     * The name shown on the launcher.
+     *
+     * Read from resources rather than written out again at each use, so an exported file
+     * name (`随心记账-我的账本-20260916.csv`) follows a rename instead of contradicting it.
+     */
+    val appName: String by lazy { appContext.getString(R.string.app_name) }
 
     /**
      * Application-scoped and never cancelled: the only work started here is

@@ -150,7 +150,7 @@ class AppBackupTest {
         // Not `.json`: a backup is not a file to open in an editor, and one named `….json`
         // is the file another app will offer to open and then rewrite.
         assertEquals("plbk", AppBackup.EXTENSION)
-        assertEquals("记账本-备份-20260920.plbk", AppBackup.fileName("记账本", "2026-09-20"))
+        assertEquals("随心记账-备份-20260920.plbk", AppBackup.fileName("随心记账", "2026-09-20"))
     }
 
     @Test

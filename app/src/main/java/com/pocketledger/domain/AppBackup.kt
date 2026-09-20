@@ -55,7 +55,7 @@ object AppBackup {
      */
     const val EXTENSION = "plbk"
 
-    /** `记账本-备份-20260920.plbk` */
+    /** `随心记账-备份-20260920.plbk` */
     fun fileName(appName: String, dateKey: String): String =
         "$appName-备份-${dateKey.replace("-", "")}.$EXTENSION"
 
@@ -128,14 +128,14 @@ object AppBackup {
      */
     fun decode(text: String): File {
         val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrElse {
-            throw FormatException("这个文件不是记账本备份。")
+            throw FormatException("这个文件不是随心记账备份。")
         }
-        if (root.str("format") != FORMAT) throw FormatException("这个文件不是记账本备份。")
+        if (root.str("format") != FORMAT) throw FormatException("这个文件不是随心记账备份。")
 
         val version = (root.long("version")
             ?: throw FormatException("备份文件缺少版本号，无法确认它来自哪个版本。")).toInt()
         if (version > VERSION) {
-            throw FormatException("备份来自更新的记账本（格式 v$version），当前版本读不了。")
+            throw FormatException("备份来自更新的随心记账（格式 v$version），当前版本读不了。")
         }
 
         val tables = root["tables"]?.takeIf { it is JsonObject }?.jsonObject

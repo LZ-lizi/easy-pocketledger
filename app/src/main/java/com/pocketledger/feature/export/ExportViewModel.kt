@@ -194,7 +194,7 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
                 it.copy(
                     pending = PendingExport(
                         fileName = CsvExport.fileName(
-                            appName = "记账本",
+                            appName = container.appName,
                             ledgerName = it.targetLabel,
                             dateKey = DateKeys.dateKey(LocalDate.now()),
                         ),
@@ -242,7 +242,7 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
                 it.copy(
                     pendingBackup = PendingExport(
                         fileName = AppBackup.fileName(
-                            appName = "记账本",
+                            appName = container.appName,
                             dateKey = DateKeys.dateKey(LocalDate.now()),
                         ),
                         content = AppBackup.encode(file),

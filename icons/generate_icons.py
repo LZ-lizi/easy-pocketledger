@@ -507,7 +507,7 @@ def main():
     html = f"""<!doctype html>
 <html lang="zh">
 <meta charset="utf-8">
-<title>记账本 图标集</title>
+<title>随心记账 图标集</title>
 <style>
   body {{ font: 14px/1.5 system-ui, "MiSans", sans-serif; margin: 32px; color: #111; }}
   h1 {{ font-size: 20px; margin: 0 0 4px; }}
@@ -530,7 +530,7 @@ def main():
   figcaption b {{ font-size: 12px; }}
   figcaption span {{ font-size: 11px; color: #888; }}
 </style>
-<h1>记账本 图标集</h1>
+<h1>随心记账 图标集</h1>
 <p class="note">共 {len(written)} 个界面图标 + 3 个启动图标。每个卡片左半为浅色背景、右半为深色背景；
 深色一侧用 <code>filter: invert(1)</code> 把源文件的黑色描边反相为白色，仅为对照查看 ——
 源文件本身都是黑色描边，实际由 App 在运行时着色。</p>

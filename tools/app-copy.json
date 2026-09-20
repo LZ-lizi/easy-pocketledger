@@ -5,51 +5,33 @@
    "line": 3,
    "area": "应用名称",
    "scene": "应用名称",
-   "text": "记账本",
-   "raw": "记账本",
-   "where": "app_name；导出与备份 · Prepare；导出与备份 · Prepare Backup 等5处",
+   "text": "随心记账",
+   "raw": "随心记账",
+   "where": "app_name；设置 · About Screen；桌面小组件 · Widget Body",
    "source": "res",
    "id": "app_name",
    "marks": [],
    "places": [
     "应用名称 · app_name",
-    "导出与备份 · Prepare",
-    "导出与备份 · Prepare Backup",
     "设置 · About Screen",
     "桌面小组件 · Widget Body"
    ],
-   "occurrences": 5,
+   "occurrences": 3,
    "locations": [
-    {
-     "file": "feature/export/ExportViewModel.kt",
-     "line": 197,
-     "start": 7546,
-     "end": 7551,
-     "raw": "记账本",
-     "marks": {}
-    },
-    {
-     "file": "feature/export/ExportViewModel.kt",
-     "line": 245,
-     "start": 9124,
-     "end": 9129,
-     "raw": "记账本",
-     "marks": {}
-    },
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 95,
      "start": 3594,
-     "end": 3599,
-     "raw": "记账本",
+     "end": 3600,
+     "raw": "随心记账",
      "marks": {}
     },
     {
      "file": "widget/LedgerWidget.kt",
      "line": 68,
      "start": 2674,
-     "end": 2679,
-     "raw": "记账本",
+     "end": 2680,
+     "raw": "随心记账",
      "marks": {}
     }
    ],
@@ -60,8 +42,8 @@
    "line": 4,
    "area": "桌面小组件",
    "scene": "桌面小组件文字",
-   "text": "记账本 · 本月",
-   "raw": "记账本 · 本月",
+   "text": "随心记账 · 本月",
+   "raw": "随心记账 · 本月",
    "where": "widget_small_label",
    "source": "res",
    "id": "widget_small_label",
@@ -96,8 +78,8 @@
    "line": 6,
    "area": "桌面小组件",
    "scene": "桌面小组件文字",
-   "text": "记账本 · 本月概览",
-   "raw": "记账本 · 本月概览",
+   "text": "随心记账 · 本月概览",
+   "raw": "随心记账 · 本月概览",
    "where": "widget_wide_label",
    "source": "res",
    "id": "widget_wide_label",
@@ -5809,8 +5791,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 357,
-     "start": 13020,
-     "end": 13024,
+     "start": 13044,
+     "end": 13048,
      "raw": "支出",
      "marks": {}
     },
@@ -5918,8 +5900,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 355,
-     "start": 12964,
-     "end": 12968,
+     "start": 12988,
+     "end": 12992,
      "raw": "收入",
      "marks": {}
     },
@@ -6766,8 +6748,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 365,
-     "start": 13324,
-     "end": 13330,
+     "start": 13348,
+     "end": 13354,
      "raw": "手动录入",
      "marks": {}
     },
@@ -6813,8 +6795,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 361,
-     "start": 13149,
-     "end": 13153,
+     "start": 13173,
+     "end": 13177,
      "raw": "模板",
      "marks": {}
     },
@@ -6859,8 +6841,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 362,
-     "start": 13198,
-     "end": 13205,
+     "start": 13222,
+     "end": 13229,
      "raw": "支付宝导入",
      "marks": {}
     }
@@ -6897,8 +6879,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 363,
-     "start": 13250,
-     "end": 13256,
+     "start": 13274,
+     "end": 13280,
      "raw": "微信导入",
      "marks": {}
     }
@@ -7297,8 +7279,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 356,
-     "start": 12995,
-     "end": 12999,
+     "start": 13019,
+     "end": 13023,
      "raw": "转账",
      "marks": {}
     },
@@ -8184,8 +8166,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 364,
-     "start": 13299,
-     "end": 13303,
+     "start": 13323,
+     "end": 13327,
      "raw": "月付",
      "marks": {}
     },
@@ -8363,8 +8345,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 212,
-     "start": 7989,
-     "end": 7994,
+     "start": 8001,
+     "end": 8006,
      "raw": "已导出",
      "marks": {}
     }
@@ -8579,8 +8561,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 259,
-     "start": 9539,
-     "end": 9546,
+     "start": 9563,
+     "end": 9570,
      "raw": "备份已导出",
      "marks": {}
     }
@@ -9032,8 +9014,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 212,
-   "start": 8000,
-   "end": 8015,
+   "start": 8012,
+   "end": 8027,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "导出失败，请换一个位置重试",
@@ -9050,8 +9032,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 212,
-     "start": 8000,
-     "end": 8015,
+     "start": 8012,
+     "end": 8027,
      "raw": "导出失败，请换一个位置重试",
      "marks": {}
     }
@@ -9061,8 +9043,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 259,
-   "start": 9552,
-   "end": 9569,
+   "start": 9576,
+   "end": 9593,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "备份导出失败，请换一个位置重试",
@@ -9079,8 +9061,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 259,
-     "start": 9552,
-     "end": 9569,
+     "start": 9576,
+     "end": 9593,
      "raw": "备份导出失败，请换一个位置重试",
      "marks": {}
     }
@@ -9090,8 +9072,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 278,
-   "start": 10239,
-   "end": 10249,
+   "start": 10263,
+   "end": 10273,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "备份文件不可读。",
@@ -9108,8 +9090,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 278,
-     "start": 10239,
-     "end": 10249,
+     "start": 10263,
+     "end": 10273,
      "raw": "备份文件不可读。",
      "marks": {}
     }
@@ -9119,8 +9101,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 286,
-   "start": 10489,
-   "end": 10503,
+   "start": 10513,
+   "end": 10527,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "读不到这个文件，请重试。",
@@ -9137,8 +9119,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 286,
-     "start": 10489,
-     "end": 10503,
+     "start": 10513,
+     "end": 10527,
      "raw": "读不到这个文件，请重试。",
      "marks": {}
     }
@@ -9148,8 +9130,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 311,
-   "start": 11332,
-   "end": 11358,
+   "start": 11356,
+   "end": 11382,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "已恢复：{file.rowCount} 条数据",
@@ -9168,8 +9150,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 311,
-     "start": 11332,
-     "end": 11358,
+     "start": 11356,
+     "end": 11382,
      "raw": "已恢复：${file.rowCount} 条数据",
      "marks": {
       "file.rowCount": "braced"
@@ -9181,8 +9163,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 312,
-   "start": 11426,
-   "end": 11441,
+   "start": 11450,
+   "end": 11465,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "恢复失败，数据没有被改动。",
@@ -9199,8 +9181,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 312,
-     "start": 11426,
-     "end": 11441,
+     "start": 11450,
+     "end": 11465,
      "raw": "恢复失败，数据没有被改动。",
      "marks": {}
     }
@@ -9210,8 +9192,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 348,
-   "start": 12750,
-   "end": 12753,
+   "start": 12774,
+   "end": 12777,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "是",
@@ -9228,8 +9210,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 348,
-     "start": 12750,
-     "end": 12753,
+     "start": 12774,
+     "end": 12777,
      "raw": "是",
      "marks": {}
     }
@@ -9239,8 +9221,8 @@
   {
    "file": "feature/export/ExportViewModel.kt",
    "line": 348,
-   "start": 12759,
-   "end": 12762,
+   "start": 12783,
+   "end": 12786,
    "area": "导出与备份",
    "scene": "界面文字",
    "text": "否",
@@ -9257,8 +9239,8 @@
     {
      "file": "feature/export/ExportViewModel.kt",
      "line": 348,
-     "start": 12759,
-     "end": 12762,
+     "start": 12783,
+     "end": 12786,
      "raw": "否",
      "marks": {}
     }
@@ -9415,8 +9397,8 @@
     {
      "file": "widget/LedgerWidget.kt",
      "line": 111,
-     "start": 4330,
-     "end": 4336,
+     "start": 4331,
+     "end": 4337,
      "raw": "预算剩余",
      "marks": {}
     }
@@ -13271,8 +13253,8 @@
   {
    "file": "feature/settings/AboutScreen.kt",
    "line": 95,
-   "start": 3601,
-   "end": 3618,
+   "start": 3602,
+   "end": 3619,
    "area": "设置",
    "scene": "界面文字",
    "text": "版本 {versionName}",
@@ -13291,8 +13273,8 @@
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 95,
-     "start": 3601,
-     "end": 3618,
+     "start": 3602,
+     "end": 3619,
      "raw": "版本 $versionName",
      "marks": {
       "versionName": "simple"
@@ -13304,8 +13286,8 @@
   {
    "file": "feature/settings/AboutScreen.kt",
    "line": 98,
-   "start": 3684,
-   "end": 3690,
+   "start": 3685,
+   "end": 3691,
    "area": "设置",
    "scene": "界面文字",
    "text": "功能介绍",
@@ -13323,8 +13305,8 @@
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 98,
-     "start": 3684,
-     "end": 3690,
+     "start": 3685,
+     "end": 3691,
      "raw": "功能介绍",
      "marks": {}
     },
@@ -13342,12 +13324,12 @@
   {
    "file": "feature/settings/AboutScreen.kt",
    "line": 98,
-   "start": 3692,
-   "end": 3706,
+   "start": 3693,
+   "end": 3708,
    "area": "设置",
    "scene": "界面文字",
-   "text": "逐项说明记账本的各项功能",
-   "raw": "逐项说明记账本的各项功能",
+   "text": "逐项说明随心记账的各项功能",
+   "raw": "逐项说明随心记账的各项功能",
    "where": "About Screen",
    "source": "kt",
    "id": null,
@@ -13360,9 +13342,9 @@
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 98,
-     "start": 3692,
-     "end": 3706,
-     "raw": "逐项说明记账本的各项功能",
+     "start": 3693,
+     "end": 3708,
+     "raw": "逐项说明随心记账的各项功能",
      "marks": {}
     }
    ],
@@ -13371,8 +13353,8 @@
   {
    "file": "feature/settings/AboutScreen.kt",
    "line": 101,
-   "start": 3785,
-   "end": 3791,
+   "start": 3787,
+   "end": 3793,
    "area": "设置",
    "scene": "界面文字",
    "text": "用户协议",
@@ -13390,8 +13372,8 @@
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 101,
-     "start": 3785,
-     "end": 3791,
+     "start": 3787,
+     "end": 3793,
      "raw": "用户协议",
      "marks": {}
     },
@@ -13409,8 +13391,8 @@
   {
    "file": "feature/settings/AboutScreen.kt",
    "line": 101,
-   "start": 3793,
-   "end": 3804,
+   "start": 3795,
+   "end": 3806,
    "area": "设置",
    "scene": "界面文字",
    "text": "数据存放与使用条款",
@@ -13427,8 +13409,8 @@
     {
      "file": "feature/settings/AboutScreen.kt",
      "line": 101,
-     "start": 3793,
-     "end": 3804,
+     "start": 3795,
+     "end": 3806,
      "raw": "数据存放与使用条款",
      "marks": {}
     }
@@ -14989,11 +14971,11 @@
    "file": "feature/settings/SettingsScreen.kt",
    "line": 81,
    "start": 2723,
-   "end": 2730,
+   "end": 2731,
    "area": "设置",
    "scene": "界面文字",
-   "text": "关于记账本",
-   "raw": "关于记账本",
+   "text": "关于随心记账",
+   "raw": "关于随心记账",
    "where": "Settings Screen",
    "source": "kt",
    "id": null,
@@ -15007,8 +14989,8 @@
      "file": "feature/settings/SettingsScreen.kt",
      "line": 81,
      "start": 2723,
-     "end": 2730,
-     "raw": "关于记账本",
+     "end": 2731,
+     "raw": "关于随心记账",
      "marks": {}
     }
    ],
@@ -15017,8 +14999,8 @@
   {
    "file": "feature/settings/SettingsScreen.kt",
    "line": 98,
-   "start": 3198,
-   "end": 3202,
+   "start": 3199,
+   "end": 3203,
    "area": "设置",
    "scene": "界面文字",
    "text": "设置",
@@ -15036,8 +15018,8 @@
     {
      "file": "feature/settings/SettingsScreen.kt",
      "line": 98,
-     "start": 3198,
-     "end": 3202,
+     "start": 3199,
+     "end": 3203,
      "raw": "设置",
      "marks": {}
     },
@@ -16966,8 +16948,8 @@
   {
    "file": "widget/LedgerWidget.kt",
    "line": 79,
-   "start": 3016,
-   "end": 3028,
+   "start": 3017,
+   "end": 3029,
    "area": "桌面小组件",
    "scene": "界面文字",
    "text": "打开应用以完成初始化",
@@ -16984,8 +16966,8 @@
     {
      "file": "widget/LedgerWidget.kt",
      "line": 79,
-     "start": 3016,
-     "end": 3028,
+     "start": 3017,
+     "end": 3029,
      "raw": "打开应用以完成初始化",
      "marks": {}
     }
@@ -16995,8 +16977,8 @@
   {
    "file": "widget/LedgerWidget.kt",
    "line": 110,
-   "start": 4282,
-   "end": 4288,
+   "start": 4283,
+   "end": 4289,
    "area": "桌面小组件",
    "scene": "界面文字",
    "text": "本月支出",
@@ -17013,16 +16995,16 @@
     {
      "file": "widget/LedgerWidget.kt",
      "line": 110,
-     "start": 4282,
-     "end": 4288,
+     "start": 4283,
+     "end": 4289,
      "raw": "本月支出",
      "marks": {}
     },
     {
      "file": "widget/LedgerWidget.kt",
      "line": 112,
-     "start": 4365,
-     "end": 4371,
+     "start": 4366,
+     "end": 4372,
      "raw": "本月支出",
      "marks": {}
     }
@@ -17032,8 +17014,8 @@
   {
    "file": "widget/LedgerWidget.kt",
    "line": 126,
-   "start": 4962,
-   "end": 5155,
+   "start": 4963,
+   "end": 5156,
    "area": "桌面小组件",
    "scene": "界面文字",
    "text": "已花 {Money.format(snapshot.monthExpenseCents)} / {Money.format(snapshot.allowanceCents)}（{(snapshot.progress * 100).toInt()}%）",
@@ -17050,8 +17032,8 @@
     {
      "file": "widget/LedgerWidget.kt",
      "line": 126,
-     "start": 4962,
-     "end": 5155,
+     "start": 4963,
+     "end": 5156,
      "raw": "已花 {Money.format(snapshot.monthExpenseCents)} / {Money.format(snapshot.allowanceCents)}（{(snapshot.progress * 100).toInt()}%）",
      "marks": {}
     }
@@ -17061,8 +17043,8 @@
   {
    "file": "widget/LedgerWidget.kt",
    "line": 162,
-   "start": 6283,
-   "end": 6290,
+   "start": 6284,
+   "end": 6291,
    "area": "桌面小组件",
    "scene": "界面文字",
    "text": "＋ 记一笔",
@@ -17079,8 +17061,8 @@
     {
      "file": "widget/LedgerWidget.kt",
      "line": 162,
-     "start": 6283,
-     "end": 6290,
+     "start": 6284,
+     "end": 6291,
      "raw": "＋ 记一笔",
      "marks": {}
     }
@@ -17111,8 +17093,8 @@
    "area": "备份文件",
    "scene": "文件内容",
    "where": "Decode",
-   "text": "这个文件不是记账本备份。",
-   "raw": "这个文件不是记账本备份。",
+   "text": "这个文件不是随心记账备份。",
+   "raw": "这个文件不是随心记账备份。",
    "why": "备份文件内部的结构名与文件名。通常不需要改。",
    "marks": {},
    "number": 4
@@ -17123,8 +17105,8 @@
    "area": "备份文件",
    "scene": "文件内容",
    "where": "Decode",
-   "text": "这个文件不是记账本备份。",
-   "raw": "这个文件不是记账本备份。",
+   "text": "这个文件不是随心记账备份。",
+   "raw": "这个文件不是随心记账备份。",
    "why": "备份文件内部的结构名与文件名。通常不需要改。",
    "marks": {},
    "number": 5
@@ -17147,8 +17129,8 @@
    "area": "备份文件",
    "scene": "文件内容",
    "where": "Decode",
-   "text": "备份来自更新的记账本（格式 v{version}），当前版本读不了。",
-   "raw": "备份来自更新的记账本（格式 v$version），当前版本读不了。",
+   "text": "备份来自更新的随心记账（格式 v{version}），当前版本读不了。",
+   "raw": "备份来自更新的随心记账（格式 v$version），当前版本读不了。",
    "why": "备份文件内部的结构名与文件名。通常不需要改。",
    "marks": {
     "version": "simple"

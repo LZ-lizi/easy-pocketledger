@@ -97,7 +97,7 @@ class CsvExportTest {
 
     @Test
     fun `file names drop characters a filesystem would reject`() {
-        val name = CsvExport.fileName("记账本", "我的/账本:2026", "2026-09-16")
+        val name = CsvExport.fileName("随心记账", "我的/账本:2026", "2026-09-16")
         assertFalse(name.contains("/"))
         assertFalse(name.contains(":"))
         assertTrue(name.endsWith(".csv"))
@@ -141,7 +141,7 @@ class CsvExportTest {
 
     @Test
     fun `an empty ledger name still yields a usable file name`() {
-        assertEquals("记账本-账本-20260916.csv", CsvExport.fileName("记账本", "", "2026-09-16"))
+        assertEquals("随心记账-账本-20260916.csv", CsvExport.fileName("随心记账", "", "2026-09-16"))
     }
 
     /** Minimal RFC 4180 reader, used only to prove the writer is reversible. */

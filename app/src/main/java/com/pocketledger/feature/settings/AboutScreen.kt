@@ -92,10 +92,10 @@ fun AboutScreen(
         }
 
         item(key = "app") {
-            InfoCard("记账本", "版本 $versionName")
+            InfoCard("随心记账", "版本 $versionName")
         }
         item(key = "features") {
-            LinkCard("功能介绍", "逐项说明记账本的各项功能", onOpenFeatures)
+            LinkCard("功能介绍", "逐项说明随心记账的各项功能", onOpenFeatures)
         }
         item(key = "terms") {
             LinkCard("用户协议", "数据存放与使用条款", onOpenTermsOfUse)

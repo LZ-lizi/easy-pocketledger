@@ -93,7 +93,7 @@ object CsvExport {
         return '"' + value.replace("\"", "\"\"") + '"'
     }
 
-    /** Default file name, e.g. `记账本-我的账本-20260916.csv`. */
+    /** Default file name, e.g. `随心记账-我的账本-20260916.csv`. */
     fun fileName(appName: String, ledgerName: String, dateKey: String): String {
         val safeLedger = ledgerName.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "账本" }
         return "$appName-$safeLedger-${dateKey.replace("-", "")}.csv"

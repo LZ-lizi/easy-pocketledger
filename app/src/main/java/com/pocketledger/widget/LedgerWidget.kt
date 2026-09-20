@@ -65,7 +65,7 @@ private fun WidgetBody(snapshot: WidgetSnapshot?, wide: Boolean, context: Contex
             verticalAlignment = Alignment.Top,
         ) {
             Text(
-                text = snapshot?.ledgerName ?: "记账本",
+                text = snapshot?.ledgerName ?: "随心记账",
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurfaceVariant,
                     fontSize = 11.sp,

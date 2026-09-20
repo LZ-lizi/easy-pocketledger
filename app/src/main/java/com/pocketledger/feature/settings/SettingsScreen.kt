@@ -78,7 +78,7 @@ fun SettingsScreen(
         SettingsSection(
             title = "关于",
             entries = listOf(
-                SettingsEntry("关于记账本", onOpenAbout),
+                SettingsEntry("关于随心记账", onOpenAbout),
             ),
         ),
     )
